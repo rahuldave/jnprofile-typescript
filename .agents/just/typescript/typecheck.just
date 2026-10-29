@@ -5,7 +5,7 @@
 typecheck:
     #!/usr/bin/env sh
     # tsc stops with error TS18003 when the include list of tsconfig.json finds no file: a project with no code yet
-    out=$({{npm}} exec -- tsc --noEmit 2>&1) && { printf '%s\n' "$out"; exit 0; } || code=$?
+    out=$({{npm}} exec -- tsc --noEmit 2>&1) && { [ -z "$out" ] || printf '%s\n' "$out"; exit 0; } || code=$?
     if printf '%s\n' "$out" | grep -q 'error TS18003'; then echo "just typecheck: no code yet"; exit 0; fi
     printf '%s\n' "$out"
     exit "$code"

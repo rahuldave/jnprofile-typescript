@@ -23,7 +23,9 @@ them out.
 
 The default tools are `lint` and `typecheck`. When `tsconfig.json` finds
 no code yet, `just typecheck` and `just test` pass. tsc then stops with the
-error TS18003, and the recipes look for it.
+error TS18003, and the recipes look for it. `just test` runs every `*.test.js` file in
+`dist`, also the file of a test that you deleted from `src`. Remove `dist`
+to drop the old files.
 
 ## How to run a recipe
 
