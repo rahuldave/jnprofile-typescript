@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "name": "typescript",
+  "about": "a TypeScript project with npm, which uv runs from the nodejs-wheel package",
+  "detect": [
+    "package.json",
+    "tsconfig.json"
+  ],
+  "manifest": "package.json",
+  "init": {
+    "file": "package.json",
+    "command": [
+      "uvx",
+      "--from",
+      "nodejs-wheel==24.*",
+      "npm",
+      "init",
+      "--yes"
+    ]
+  },
+  "choices": {
+    "tasker": true,
+    "prose": true
+  },
+  "add": [
+    "uvx",
+    "--from",
+    "nodejs-wheel==24.*",
+    "npm",
+    "install",
+    "--save-dev"
+  ],
+  "remove": [
+    "uvx",
+    "--from",
+    "nodejs-wheel==24.*",
+    "npm",
+    "uninstall"
+  ],
+  "tools": {
+    "lint": {
+      "packages": [
+        "@biomejs/biome@2"
+      ],
+      "files": {
+        "biome.json": "files/biome.json"
+      },
+      "recipes": "lint.just",
+      "verify": [
+        "lint"
+      ]
+    },
+    "typecheck": {
+      "packages": [
+        "typescript@7",
+        "@types/node@24"
+      ],
+      "files": {
+        "tsconfig.json": "files/tsconfig.json"
+      },
+      "recipes": "typecheck.just",
+      "verify": [
+        "typecheck"
+      ]
+    },
+    "test": {
+      "packages": [
+        "typescript@7",
+        "@types/node@24"
+      ],
+      "files": {
+        "tsconfig.json": "files/tsconfig.json"
+      },
+      "recipes": "test.just",
+      "verify": [
+        "test"
+      ]
+    }
+  },
+  "default_tools": [
+    "lint",
+    "typecheck"
+  ],
+  "base": {
+    "recipes": "base.just",
+    "files": {
+      ".gitignore": "files/gitignore"
+    }
+  }
+}

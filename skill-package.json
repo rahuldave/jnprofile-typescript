@@ -1,0 +1,37 @@
+{
+  "schema": "https://rahuldave.github.io/agent_skill_package_maker/schema/skill-package.v1.json",
+  "version": 1,
+  "repository": {
+    "owner": "rahuldave",
+    "name": "jnprofile-typescript",
+    "url": "https://github.com/rahuldave/jnprofile-typescript"
+  },
+  "skills": [
+    {
+      "name": "typescript-profile",
+      "path": ".agents/skills/typescript-profile"
+    }
+  ],
+  "install_extras": {
+    "files": [
+      ".agents/just/typescript"
+    ]
+  },
+  "executables": {
+    "required": [
+      {
+        "name": "just",
+        "check": "just --version"
+      },
+      {
+        "name": "uv",
+        "check": "uv --version",
+        "description": "Runs node and npm from the nodejs-wheel package."
+      }
+    ],
+    "optional": []
+  },
+  "npx": {
+    "supported": false
+  }
+}
