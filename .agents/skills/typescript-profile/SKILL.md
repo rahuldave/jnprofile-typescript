@@ -21,8 +21,9 @@ them out.
 | `typecheck` | `typescript@7`, `@types/node@24` | `typecheck` | `tsconfig.json` |
 | `test` | `typescript@7`, `@types/node@24` | `build`, `test` | `tsconfig.json` |
 
-The default tools are `lint` and `typecheck`. With no `.ts` file in `src`
-yet, `just typecheck` and `just test` pass.
+The default tools are `lint` and `typecheck`. When `tsconfig.json` finds
+no code yet, `just typecheck` and `just test` pass. tsc then stops with the
+error TS18003, and the recipes look for it.
 
 ## How to run a recipe
 
@@ -30,6 +31,9 @@ yet, `just typecheck` and `just test` pass.
 - **`just lint`** runs the `lint` of each language of the project.
 - **`just verify`** runs every installed check of each language, then `git
   diff --check`.
+- **With more than one language**, a combined recipe such as `just test x`
+  gives the same arguments to each language. To give arguments to one
+  language, run `just typescript test x`.
 
 If the Justfile of the project has its own recipe with the same name, that
 recipe runs. Then `just typescript NAME` runs the recipe of the profile.
