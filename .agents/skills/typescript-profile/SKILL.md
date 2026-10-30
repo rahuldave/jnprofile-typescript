@@ -16,7 +16,7 @@ them out.
 
 | Tool | Packages | Recipes | Config files |
 |---|---|---|---|
-| none, always there | none | `setup` | `.gitignore` |
+| none, always there | none | `setup` | `.gitignore`, `.worktreedisposable` |
 | `lint` | `@biomejs/biome@2` | `fmt`, `lint` | `biome.json` |
 | `typecheck` | `typescript@7`, `@types/node@24` | `typecheck` | `tsconfig.json` |
 | `test` | `typescript@7`, `@types/node@24` | `build`, `test` | `tsconfig.json` |

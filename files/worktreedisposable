@@ -1,0 +1,6 @@
+# Written by jnprofile-typescript when the project had no .worktreedisposable. The file is yours: change it as the
+# project needs. just worktrees-prune reads it: the ignored files that these gitignore patterns name can be made again,
+# so they do not keep a worktree. The package manager makes node_modules again from its lock file. An edit made in
+node_modules is lost: save it as a patch first.
+node_modules/
+*.tsbuildinfo
