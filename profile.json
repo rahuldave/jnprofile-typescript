@@ -83,9 +83,18 @@
   ],
   "base": {
     "recipes": "base.just",
-    "files": {
-      ".gitignore": "files/gitignore",
-      ".worktreedisposable": "files/worktreedisposable"
+    "lines": {
+      ".gitignore": [
+        "node_modules/",
+        "dist/",
+        ".local/",
+        "*.tsbuildinfo"
+      ],
+      ".worktreedisposable": [
+        "# npm install makes node_modules again from the lock file. An edit inside node_modules is lost, so save it as a patch first.",
+        "node_modules/",
+        "*.tsbuildinfo"
+      ]
     }
   }
 }

@@ -14,18 +14,28 @@ them out.
 
 ## The tools and their recipes
 
-| Tool | Packages | Recipes | Config files |
-|---|---|---|---|
-| none, always there | none | `setup` | `.gitignore`, `.worktreedisposable` |
-| `lint` | `@biomejs/biome@2` | `fmt`, `lint` | `biome.json` |
-| `typecheck` | `typescript@7`, `@types/node@24` | `typecheck` | `tsconfig.json` |
-| `test` | `typescript@7`, `@types/node@24` | `build`, `test` | `tsconfig.json` |
+| Tool | Packages | Recipes | Config files | Lines in `.gitignore` and `.worktreedisposable` |
+|---|---|---|---|---|
+| none, always there | none | `setup` | none | `node_modules/`, `*.tsbuildinfo`; also `dist/` and `.local/` in `.gitignore` |
+| `lint` | `@biomejs/biome@2` | `fmt`, `lint` | `biome.json` | none |
+| `typecheck` | `typescript@7`, `@types/node@24` | `typecheck` | `tsconfig.json` | none |
+| `test` | `typescript@7`, `@types/node@24` | `build`, `test` | `tsconfig.json` | none |
 
 The default tools are `lint` and `typecheck`. When `tsconfig.json` finds
 no code yet, `just typecheck` and `just test` pass. tsc then stops with the
 error TS18003, and the recipes look for it. `just test` runs every `*.test.js` file in
 `dist`, also the file of a test that you deleted from `src`. Remove `dist`
 to drop the old files.
+
+## Lines in shared files
+
+A tool can also add lines to a file that other profiles and you share, such
+as `.gitignore`. `profile.json` lists these lines under `lines`. `just
+install` writes the lines of each tool in a block of their own, at the start
+of the file. The begin comment of a block names the tool, the command and
+the entry in `.agents/stack-log.jsonl`. `just uninstall` of the tool takes
+its lines out again, unless another profile needs them. Your own lines come
+after the blocks, and the installer does not change them.
 
 ## How to run a recipe
 
