@@ -3,7 +3,7 @@
 jnprofile-typescript is the TypeScript profile of
 [jnterfaces](https://github.com/rahuldave/jnterfaces). A profile sets up a
 project in one language. It has tools, for example `lint`, and each tool
-brings its packages, its config files and its recipes.
+brings its packages, its parts of the config files and its recipes.
 
 ## Install
 
@@ -29,7 +29,7 @@ The machine needs `just` and `uv`. `uv` runs node and npm from the
 |---|---|
 | `profile.json` | The profile: its manifest, the commands that add and remove packages, and its tools. |
 | `.agents/just/typescript/` | One recipe file for each tool. The installer copies the folder into the project. |
-| `files/` | The config files of the tools. `just install` writes one when the project has none, and `just uninstall` removes it when nobody changed it. |
+| `files/` | The sources of the parts. `just install` copies each source to an own file under `.agents/config/` and adds an include of it to the config file. `just uninstall` takes them out. |
 | `.agents/skills/typescript-profile/` | The skill that tells an agent how to use the recipes. |
 
 ## License

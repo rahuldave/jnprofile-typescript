@@ -9,12 +9,12 @@ The typescript profile of jnterfaces sets up a TypeScript project with npm.
 `uv` runs node and npm from the `nodejs-wheel` package, so the machine needs
 `just` and `uv` only. A tool is one unit of the setup, for example `lint`.
 `just install lint` adds the packages of the tool to `devDependencies`,
-copies its config files, and adds its recipes. `just uninstall lint` takes
+adds its parts to the config files, and adds its recipes. `just uninstall lint` takes
 them out.
 
 ## The tools and their recipes
 
-| Tool | Packages | Recipes | Config files | Lines in `.gitignore` and `.worktreedisposable` |
+| Tool | Packages | Recipes | Parts in config files | Lines in `.gitignore` and `.worktreedisposable` |
 |---|---|---|---|---|
 | none, always there | none | `setup` | none | `node_modules/`, `*.tsbuildinfo`; also `dist/` and `.local/` in `.gitignore` |
 | `lint` | `@biomejs/biome@2` | `fmt`, `lint` | `biome.json` | none |
@@ -27,15 +27,19 @@ error TS18003, and the recipes look for it. `just test` runs every `*.test.js` f
 `dist`, also the file of a test that you deleted from `src`. Remove `dist`
 to drop the old files.
 
-## Lines in shared files
+## Parts in shared files
 
-A tool can also add lines to a file that other profiles and you share, such
-as `.gitignore`. `profile.json` lists these lines under `lines`. `just
-install` writes the lines of each tool in a block of their own, at the start
-of the file. The begin comment of a block names the tool, the command and
-the entry in `.agents/stack-log.jsonl`. `just uninstall` of the tool takes
-its lines out again, unless another profile needs them. Your own lines come
-after the blocks, and the installer does not change them.
+A tool adds a part to a file that other profiles and you share, such as
+`.gitignore` or `biome.json`. `profile.json` lists the lines of a tool under
+`lines`, and its other parts under `parts`. `just install` writes the lines
+of each tool in a block of their own, at the start of the file.
+
+A config
+file gets an include, such as an `extend` or an `extends`, that reads an own
+file under `.agents/config/typescript/`. The key `parts` in `.agents/stack.json`
+records each part. `just uninstall` of the tool takes its parts out again,
+unless another tool needs them. Your own lines and settings stay, and your
+settings win over the settings of the own file.
 
 ## How to run a recipe
 
@@ -57,8 +61,9 @@ module only, so it runs `just typescript NAME`.
 - **`.agents/just/typescript/`** holds the recipe files. The installer
   writes them. Do not edit them, because the next `just install` names an
   edited file and does not update it. Put your own recipes in the Justfile.
-- **The config files**, for example `biome.json`, are yours after the first
-  install. A later install leaves them alone.
+- **`.agents/config/typescript/`** holds the own files, such as `lint.json`. The
+  installer writes them. Do not edit them. Put a setting of yours in
+  `biome.json`, where it wins.
 
 ## Rules for agents
 

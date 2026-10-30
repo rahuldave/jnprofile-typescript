@@ -48,7 +48,10 @@
       "recipes": "lint.just",
       "verify": [
         "lint"
-      ]
+      ],
+      "parts": {
+        "biome.json": "files/lint.json"
+      }
     },
     "typecheck": {
       "packages": [
@@ -61,7 +64,10 @@
       "recipes": "typecheck.just",
       "verify": [
         "typecheck"
-      ]
+      ],
+      "parts": {
+        "tsconfig.json": "files/tsconfig.json"
+      }
     },
     "test": {
       "packages": [
@@ -74,7 +80,10 @@
       "recipes": "test.just",
       "verify": [
         "test"
-      ]
+      ],
+      "parts": {
+        "tsconfig.json": "files/tsconfig.json"
+      }
     }
   },
   "default_tools": [
