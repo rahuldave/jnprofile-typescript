@@ -45,3 +45,5 @@ The packages are `typescript@7` and `@types/node@24`, as for `typecheck`. The to
 |---|---|
 | `just build` | Compiles the code into `dist/`, with `tsconfig.json` |
 | `just test` | Compiles, then runs the tests in `dist/` with `node --test`. A project whose `tsconfig.json` finds no code yet passes |
+
+Put the code and the tests in `src/`. Name each test file `NAME.test.ts`, for example `src/app.test.ts`. The build writes it as `dist/app.test.js`, and `node --test` finds each file of that name. A test imports the code with the `.js` ending, for example `import { add } from "./app.js"`, because the code runs from `dist/`.
