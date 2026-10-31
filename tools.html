@@ -1,0 +1,94 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="generator" content="smalldocs-0.5.4"><meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes"><title>The tools – jnprofile-typescript</title><link rel="stylesheet" href="site_libs/themes/cosmo.min.css" data-mode="light" class="quarto-color-scheme" id="quarto-bootstrap-light" media="not all and (prefers-color-scheme: dark)"><link rel="stylesheet" href="site_libs/themes/darkly.min.css" data-mode="dark" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap-dark" media="(prefers-color-scheme: dark)"><link rel="stylesheet" href="site_libs/bootstrap-icons/bootstrap-icons.min.css"><link rel="stylesheet" href="site_libs/smalldocs.css"><meta name="smalldocs:offset" content="./"><script src="site_libs/bootstrap/bootstrap.bundle.min.js"></script><script src="site_libs/fuse/fuse.min.js"></script><script src="site_libs/smalldocs.js" defer></script><script>(function(){var d=document.documentElement,s=null;try{s=localStorage.getItem('smalldocs-scheme')}catch(e){}var alt=s?s==='alternate':!!(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);var ls=document.querySelectorAll('link.quarto-color-scheme');if(alt)d.dataset.scheme='alternate';if(s)ls.forEach(function(l){var on=l.classList.contains('quarto-color-alternate')===alt;if(on)l.setAttribute('blocking','render');l.media=on?'all':'not all'});var on=ls[alt?1:0];if(on&&on.dataset.mode==='dark')d.classList.add('quarto-dark')})();</script></head><body class="nav-fixed"><header id="quarto-header" class="headroom sticky-top"><nav class="navbar navbar-expand-lg sd-navbar-default"><div class="navbar-container container-fluid"><div class="navbar-brand-container mx-auto"><a class="navbar-brand" href="index.html"><span class="navbar-title">jnprofile-typescript</span></a></div><button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button><div class="collapse navbar-collapse" id="navbarCollapse"><ul class="navbar-nav navbar-nav-scroll me-auto"><li class="nav-item"><a class="nav-link" href="index.html"><span class="menu-text">Home</span></a></li><li class="nav-item"><a class="nav-link active" href="tools.html" aria-current="page"><span class="menu-text">Tools</span></a></li></ul><ul class="navbar-nav navbar-nav-scroll ms-auto"><li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="nav-menu-1" role="link" data-bs-toggle="dropdown" aria-expanded="false"><span class="menu-text">Projects</span></a><ul class="dropdown-menu" aria-labelledby="nav-menu-1"><li class=""><a class="dropdown-item" href="https://rahuldave.github.io/jnterfaces/"><span class="menu-text">jnterfaces</span></a></li><li class=""><a class="dropdown-item" href="https://rahuldave.github.io/jnprofile-python/"><span class="menu-text">jnprofile-python</span></a></li><li class=""><a class="dropdown-item" href="https://rahuldave.github.io/jnprofile-typescript/"><span class="menu-text">jnprofile-typescript</span></a></li><li class=""><a class="dropdown-item" href="https://rahuldave.github.io/agent_gest_git_skills/"><span class="menu-text">agent_gest_git_skills</span></a></li></ul></li><li class="nav-item compact"><a class="nav-link" href="https://github.com/rahuldave/jnprofile-typescript" aria-label="github"><i class="bi bi-github" role="img"></i></a></li><li class="nav-item compact"><a class="quarto-color-scheme-toggle nav-link" href="" title="Toggle dark mode" onclick="window.smalldocsToggleScheme(); return false;"><i class="bi"></i></a></li></ul><div class="quarto-navbar-tools"><div class="smalldocs-search" id="quarto-search"><i class="bi bi-search" aria-hidden="true"></i><input type="search" class="form-control form-control-sm" placeholder="Search" aria-label="Search" autocomplete="off"><div class="smalldocs-search-results dropdown-menu"></div></div></div></div></div></nav></header><div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article has-margin"><div id="quarto-margin-sidebar" class="sidebar margin-sidebar"><nav id="TOC" role="doc-toc" class="toc-active"><h2 id="toc-title">On this page</h2><ul><li><a href="#the-base" id="toc-the-base" class="nav-link" data-scroll-target="#the-base">The base</a></li><li><a href="#lint" id="toc-lint" class="nav-link" data-scroll-target="#lint">lint</a></li><li><a href="#typecheck" id="toc-typecheck" class="nav-link" data-scroll-target="#typecheck">typecheck</a></li><li><a href="#test" id="toc-test" class="nav-link" data-scroll-target="#test">test</a></li></ul></nav><div class="toc-actions"><div class="action-links"><a href="https://github.com/rahuldave/jnprofile-typescript/blob/main/docs/tools.md" class="toc-action"><i class="bi bi-code"></i> View source</a></div><div class="action-links"><a href="https://github.com/rahuldave/jnprofile-typescript/issues/new" class="toc-action"><i class="bi bi-chat-right"></i> Report an issue</a></div></div></div><main class="content" id="quarto-document-content"><header id="title-block-header" class="quarto-title-block default"><div class="quarto-title"><h1 class="title">The tools</h1></div><div class="quarto-title-meta"></div></header><p>Each tool of the profile brings its packages, its recipes and its parts. The installer adds the packages to the <code>devDependencies</code> of <code>package.json</code> with npm.</p>
+<section id="the-base" class="level2">
+<h2 class="anchored" data-anchor-id="the-base">The base</h2>
+<p>Each project of the profile gets the base, with no tool.</p>
+<div class="sd-table">
+<table class="caption-top table">
+<thead>
+<tr>
+<th>Recipe</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>just setup</code></td>
+<td>Installs every dependency into <code>node_modules</code>, as <code>package-lock.json</code> says</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The recipes run node and npm with <code>uvx --from &#x27;nodejs-wheel==24.*&#x27;</code>. The cache of npm is in <code>.local/npm-cache</code>.</p>
+<p>The base adds <code>node_modules/</code>, <code>dist/</code>, <code>.local/</code> and <code>*.tsbuildinfo</code> to <code>.gitignore</code>. It adds <code>node_modules/</code> and <code>*.tsbuildinfo</code> to <code>.worktreedisposable</code>, the list of files that a command makes again, so that they do not keep a worktree.</p>
+</section>
+<section id="lint" class="level2">
+<h2 class="anchored" data-anchor-id="lint">lint</h2>
+<p>The package is <code>@biomejs/biome@2</code>.</p>
+<div class="sd-table">
+<table class="caption-top table">
+<thead>
+<tr>
+<th>Recipe</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>just fmt</code></td>
+<td>Formats the code. Extra arguments go to biome: <code>just fmt src</code></td>
+</tr>
+<tr>
+<td><code>just lint</code></td>
+<td>Checks the code against the rules of biome. Extra arguments go to biome: <code>just lint --write</code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The part is an include in <code>biome.json</code>. Its <code>extends</code> names <code>./.agents/config/typescript/lint.json</code>. That file turns on the git integration of biome, so biome skips the files that git ignores. It leaves out <code>dist</code>, <code>node_modules</code>, <code>.agents</code>, <code>.claude</code> and <code>.codex</code>, and sets an indent of spaces and lines of at most 120 characters.</p>
+</section>
+<section id="typecheck" class="level2">
+<h2 class="anchored" data-anchor-id="typecheck">typecheck</h2>
+<p>The packages are <code>typescript@7</code> and <code>@types/node@24</code>.</p>
+<div class="sd-table">
+<table class="caption-top table">
+<thead>
+<tr>
+<th>Recipe</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>just typecheck</code></td>
+<td>Checks the types with tsc and <code>tsconfig.json</code>. A project whose <code>tsconfig.json</code> finds no code yet passes</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The part is an include in <code>tsconfig.json</code>. Its <code>extends</code> names <code>./.agents/config/typescript/tsconfig.json</code>. That file compiles <code>src/</code> into <code>dist/</code> for <code>ES2023</code> and <code>NodeNext</code> modules, in strict mode, with source maps and the types of node. Its paths start with <code>${configDir}</code>, so they are paths in your project, not in <code>.agents/config/</code>.</p>
+</section>
+<section id="test" class="level2">
+<h2 class="anchored" data-anchor-id="test">test</h2>
+<p>The packages are <code>typescript@7</code> and <code>@types/node@24</code>, as for <code>typecheck</code>. The tool has the same part in <code>tsconfig.json</code>. When both tools are on, the include stays until both are off.</p>
+<div class="sd-table">
+<table class="caption-top table">
+<thead>
+<tr>
+<th>Recipe</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>just build</code></td>
+<td>Compiles the code into <code>dist/</code>, with <code>tsconfig.json</code></td>
+</tr>
+<tr>
+<td><code>just test</code></td>
+<td>Compiles, then runs the tests in <code>dist/</code> with <code>node --test</code>. A project whose <code>tsconfig.json</code> finds no code yet passes</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</main></div><footer class="footer"><div class="nav-footer"><div class="nav-footer-left">Part of <a href="https://rahuldave.github.io/jnterfaces/">jnterfaces</a> and its packages.</div><div class="nav-footer-center"></div><div class="nav-footer-right">Built with <a href="https://docs.smallish.dev/">smalldocs</a>.</div></div></footer></body></html>
