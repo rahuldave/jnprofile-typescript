@@ -35,7 +35,7 @@ website:
     right: "Built with [smalldocs](https://docs.smallish.dev/)."
 
 theme:
-  light: cosmo
-  dark: darkly
+  light: litera-reading
+  dark: darkly-reading
 toc: true
 code-copy: true
