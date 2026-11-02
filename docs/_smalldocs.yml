@@ -4,6 +4,7 @@ project:
 
 website:
   title: jnprofile-typescript
+  favicon: favicon.svg
   description: "The TypeScript profile of jnterfaces: biome, tsc and node --test, with npm from uv"
   site-url: https://rahuldave.github.io/jnprofile-typescript/
   repo-url: https://github.com/rahuldave/jnprofile-typescript
