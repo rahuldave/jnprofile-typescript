@@ -3,10 +3,13 @@
 jnprofile-typescript is the TypeScript profile of
 [jnterfaces](https://github.com/rahuldave/jnterfaces). A profile sets up a
 project in one language. It has tools, for example `lint`, and each tool
-brings its packages, its parts of the config files and its recipes.
+brings its packages, its parts of the config files and its recipes. A part is
+the piece of a shared config file that a tool owns. A recipe is a command of
+the project's Justfile, such as `just lint`.
 
-The documentation site is https://rahuldave.github.io/jnprofile-typescript/. It is built from `docs/`.
-`just docs` previews it, and `just docs-publish` publishes it to the branch `gh-pages`.
+The documentation site is https://rahuldave.github.io/jnprofile-typescript/. Its
+pages are in `docs/`. `just docs` shows a preview of the site, and
+`just docs-publish` publishes it to the branch `gh-pages`.
 
 ## Install
 
@@ -32,9 +35,9 @@ The machine needs `just` and `uv`. `uv` runs node and npm from the
 |---|---|
 | `profile.json` | The profile: its manifest, the commands that add and remove packages, and its tools. |
 | `.agents/just/typescript/` | One recipe file for each tool. The installer copies the folder into the project. |
-| `files/` | The sources of the parts. `just install` copies each source to an own file under `.agents/config/` and adds an include of it to the config file. `just uninstall` takes them out. |
+| `files/` | The sources of the parts. `just install` copies each source to a file of its own under `.agents/config/` and adds an include of that file to the config file. `just uninstall` takes the parts out. |
 | `.agents/skills/typescript-profile/` | The skill that tells an agent how to use the recipes. |
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+The license is MIT. See [LICENSE](LICENSE).
