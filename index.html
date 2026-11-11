@@ -4,7 +4,7 @@
 <h2 class="anchored" data-anchor-id="install">Install</h2>
 <p>Run this command in a project that has the jnterfaces installer:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash">just install --profile typescript</code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>The command installs the tools <code>lint</code> and <code>typecheck</code>. It also turns on the default roles of the profile, <code>tasker</code> and <code>prose</code>, unless you choose otherwise. <a href="https://rahuldave.github.io/jnterfaces/#roles">The roles</a> in the jnterfaces guide tells what each role installs. In a folder with no <code>package.json</code>, it first runs <code>npm init --yes</code>.</p>
+<p>In a folder with no <code>package.json</code>, the command first runs <code>npm init --yes</code>. It then installs the tools <code>lint</code> and <code>typecheck</code>. If you do not choose other roles, it also turns on the default roles of the profile, <code>tasker</code> and <code>prose</code>. The section <a href="https://rahuldave.github.io/jnterfaces/#roles">The roles</a> of the jnterfaces guide says what each role installs.</p>
 <p>Then add or remove a tool:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash">just install <span class="bu">test</span>
 just uninstall lint</code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -44,19 +44,19 @@ just uninstall lint</code></pre></div><button title="Copy to Clipboard" class="c
 </section>
 <section id="how-the-parts-work" class="level2">
 <h2 class="anchored" data-anchor-id="how-the-parts-work">How the parts work</h2>
-<p>A part is the piece of a shared config file that a tool owns. <code>just install</code> adds the part, and <code>just uninstall</code> takes out only that part. Your own settings stay.</p>
+<p>A part is the piece of a shared config file that a tool owns. <code>just install</code> adds the part, and <code>just uninstall</code> takes out only that part. Your own settings stay. A part is an include or a block of lines.</p>
 <ul>
 <li><strong><code>biome.json</code> and <code>tsconfig.json</code> get an include.</strong> The installer writes the settings of the profile to a file under <code>.agents/config/typescript/</code>, and adds that file to <code>extends</code> in your file. A setting in your file wins over the setting of the profile. When the project has a <code>biome.jsonc</code> and no <code>biome.json</code>, the include goes to <code>biome.jsonc</code>.</li>
 <li><strong><code>.gitignore</code> and <code>.worktreedisposable</code> get a block of lines.</strong> A block starts and ends with a comment that names its owner.</li>
 </ul>
-<p>Do not edit a file under <code>.agents/config/</code>. Only the installer writes it. <a href="https://rahuldave.github.io/jnterfaces/stack-guide.html#shared-files-and-the-record">Shared files and the record</a> in the jnterfaces guide tells you how the installer keeps a record of each part.</p>
+<p>Do not edit a file under <code>.agents/config/</code>. Only the installer writes these files. The section <a href="https://rahuldave.github.io/jnterfaces/stack-guide.html#shared-files-and-the-record">Shared files and the record</a> of the jnterfaces guide says how the installer keeps a record of each part.</p>
 </section>
 <section id="the-other-sites" class="level2">
 <h2 class="anchored" data-anchor-id="the-other-sites">The other sites</h2>
 <ul>
 <li><a href="https://rahuldave.github.io/jnterfaces/">jnterfaces</a>: the installer, and the <code>just</code>, <code>jagt-protocol</code> and <code>cx</code> skills.</li>
 <li><a href="https://rahuldave.github.io/jnprofile-python/">jnprofile-python</a>: the Python profile.</li>
-<li><a href="https://rahuldave.github.io/agent_gest_git_skills/">agent_gest_git_skills</a>: the tasker role and its g skills.</li>
+<li><a href="https://rahuldave.github.io/agent_gest_git_skills/">agent_gest_git_skills</a>: the tasker role and its g skills, the skills whose names start with g.</li>
 </ul>
 </section>
 </main></div><footer class="footer"><div class="nav-footer"><div class="nav-footer-left">Part of <a href="https://rahuldave.github.io/jnterfaces/">jnterfaces</a> and its packages.</div><div class="nav-footer-center"></div><div class="nav-footer-right">Built with <a href="https://docs.smallish.dev/">smalldocs</a>.</div></div></footer></body></html>
