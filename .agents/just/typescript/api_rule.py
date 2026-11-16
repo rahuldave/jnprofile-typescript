@@ -8,9 +8,11 @@ is_api is True when the path is a source file of the API pages, as api-check of 
 needs the tool api and the docs role, as .agents/stack.json records them. Otherwise is_api is False for every path.
 The entry comes from the TypeScript sections of the key api of docs/_smalldocs.yml, or else from the default of
 api-check: the index of src, or each code file in src. From an entry file, the rule follows the relative imports and
-re-exports, so a file that the entry reaches counts. An entry folder holds files that count. Test files, declaration
-files, the files of .agents/generated.txt of the parent commit and the files of the tool folders never count. A
-config that the rule cannot read gives False for every path.
+re-exports, so a file that the entry reaches counts. A folder that the config names as an entry holds files that
+count, and its test files and declaration files count too, because TypeDoc expands the folder and documents them.
+Otherwise test files and declaration files do not count. The files of .agents/generated.txt of the parent commit and
+the files of the tool folders never count. A docs config that the rule cannot read gives True for each code file, so
+the gate is not turned off without notice.
 """
 import json
 import os
@@ -59,10 +61,16 @@ def _git(*args):
     return run.stdout if run.returncode == 0 else None
 
 
+def _typescript(path):
+    """True when PATH, relative to the top, is a TypeScript file outside the tool folders and node_modules: a code
+    file, a test file or a declaration file."""
+    return path.endswith(CODE) and not path.startswith(TOOL_FOLDERS) and 'node_modules' not in path.split('/')[:-1]
+
+
 def _code(path):
-    """True when PATH, relative to the top, is a code file that can feed the API pages."""
-    return (path.endswith(CODE) and not path.endswith(DECLARATIONS) and not path.endswith(TESTS)
-            and not path.startswith(TOOL_FOLDERS) and 'node_modules' not in path.split('/')[:-1])
+    """True when PATH, relative to the top, is a code file that can feed the API pages: no test file and no
+    declaration file."""
+    return _typescript(path) and not path.endswith(DECLARATIONS) and not path.endswith(TESTS)
 
 
 def _generated():
@@ -260,7 +268,8 @@ def _relative(path):
 
 
 def _entries(generated):
-    """The entry paths of the API, relative to the top. Raises ValueError when the config cannot be read."""
+    """The entry paths of the API, relative to the top, and True when the docs config names them. Raises ValueError
+    when the config cannot be read."""
     settings = _api_settings()
     sections = settings if isinstance(settings, list) else [settings]
     typescript = [section for section in sections if isinstance(section, dict)
@@ -272,12 +281,12 @@ def _entries(generated):
             if isinstance(path, str) and path and _relative(path):
                 entries.append(_relative(path))
     if entries:
-        return entries
+        return entries, True
     # Without a TypeScript section, or with no entry in it, the entry is the default of api-check.
     for index in ENTRIES:
         if os.path.isfile(index) and index not in generated:
-            return [index]
-    return [SOURCE]
+            return [index], False
+    return [SOURCE], False
 
 
 def _resolve(origin, name):
@@ -293,8 +302,8 @@ def _resolve(origin, name):
 
 
 def _reached(entries):
-    """The code files that ENTRIES reach: an entry folder holds them, and an entry file reaches the files of its
-    relative imports and re-exports, and theirs."""
+    """The files that ENTRIES reach, and the entry folders: an entry folder holds files, and an entry file reaches
+    the files of its relative imports and re-exports, and theirs."""
     found, folders, todo = set(), [], []
     for entry in entries:
         if entry == '.':
@@ -316,8 +325,9 @@ def _reached(entries):
 
 
 def _rule():
-    """The files and the folders of the API, from the current state of the project, computed once. None when the
-    project has no API to check, or when its config cannot be read."""
+    """The files and the folders of the API, from the current state of the project, computed once, with the test of
+    a file in a folder and the generated files. None without the tool api or the docs role. When the docs config
+    cannot be read, each code file counts."""
     if 'rule' not in _CACHE:
         rule = None
         try:
@@ -327,12 +337,20 @@ def _rule():
             choices = record.get('choices') if isinstance(record, dict) else None
             on = (isinstance(tools, list) and 'typescript:api' in tools and isinstance(choices, dict)
                   and choices.get('docs') is True)
-            if on:
+        except (OSError, ValueError):
+            on = False
+        if on:
+            try:
                 generated = _generated()
-                files, folders = _reached(_entries(generated))
-                rule = (files, folders, generated)
-        except (OSError, ValueError, KeyError, TypeError, IndexError, RecursionError):
-            rule = None
+            except ValueError:
+                generated = set()
+            try:
+                entries, named = _entries(generated)
+                files, folders = _reached(entries)
+                # TypeDoc expands a folder of the config, test files and declaration files too.
+                rule = (files, folders, _typescript if named else _code, generated)
+            except Exception:  # noqa: BLE001 - a config that the rule cannot read: each code file counts
+                rule = (set(), [''], _code, generated)
         _CACHE['rule'] = rule
     return _CACHE['rule']
 
@@ -344,14 +362,14 @@ def is_api(path):
         if posixpath.isabs(path):
             path = os.path.relpath(path, os.path.realpath('.')).replace(os.sep, '/')
         path = posixpath.normpath(path)
-        if not _code(path) or path.startswith('../'):
+        if not _typescript(path) or path.startswith('../'):
             return False
         rule = _rule()
         if rule is None:
             return False
-        files, folders, generated = rule
+        files, folders, in_folder, generated = rule
         if path in generated:
             return False
-        return path in files or any(path.startswith(folder) for folder in folders)
+        return path in files or in_folder(path) and any(path.startswith(folder) for folder in folders)
     except Exception:  # noqa: BLE001 - a rule of the gate must never stop the gate
         return False

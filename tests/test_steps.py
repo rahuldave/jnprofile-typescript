@@ -1300,12 +1300,21 @@ class ApiRuleTests(unittest.TestCase):
                 self.write("docs/_smalldocs.yml", config)
                 self.assertEqual(self.accepted("src/a.ts", "lib/b.ts"), {"src/a.ts"})
 
-    def test_a_broken_config_gives_false_and_no_error(self) -> None:
+    def test_a_broken_docs_config_makes_each_code_file_count(self) -> None:
         self.write("src/a.ts")
+        self.write("lib/b.ts")
+        self.write("src/gen.ts")
+        self.write(".agents/generated.txt", "src/gen.ts\n")
+        self.commit()
         for config in ("api: [unclosed\n", "api:\n\tlanguage: typescript\n", "api:\n  language: typescript\n x: 1\n"):
             with self.subTest(config=config):
                 self.write("docs/_smalldocs.yml", config)
-                self.assertEqual(self.accepted("src/a.ts"), set())
+                self.assertEqual(self.accepted("src/a.ts", "lib/b.ts", "src/a.test.ts", "src/s.d.ts", "src/gen.ts",
+                                               ".agents/x.ts", "node_modules/p/i.ts", "README.md"),
+                                 {"src/a.ts", "lib/b.ts"})
+
+    def test_a_broken_stack_record_gives_false(self) -> None:
+        self.write("src/a.ts")
         for record in ("{not json", "[1, 2]"):
             with self.subTest(record=record):
                 self.write("docs/_smalldocs.yml", "project:\n  type: website\n")
@@ -1370,13 +1379,36 @@ class ApiRuleTests(unittest.TestCase):
                                         check=True).stdout
                 self.assertEqual(json.loads(ours), json.loads(theirs))
 
-    def test_yaml_that_the_rule_does_not_read_gives_false(self) -> None:
+    def test_yaml_that_the_rule_does_not_read_makes_each_code_file_count(self) -> None:
         self.write("src/a.ts")
+        self.write("lib/b.ts")
         for config in ("api: &ts\n  language: typescript\n", "api: !!map\n  language: typescript\n",
                        "api:\n  entry: |\n    ../src/a.ts\n", "api:\n  language: typescript\n  entry: '../a.ts\n"):
             with self.subTest(config=config):
                 self.write("docs/_smalldocs.yml", config)
-                self.assertEqual(self.accepted("src/a.ts"), set())
+                self.assertEqual(self.accepted("src/a.ts", "lib/b.ts", "src/a.test.ts"), {"src/a.ts", "lib/b.ts"})
+        # Without the tool api, the rule stays off.
+        self.stack({"tools": ["typescript:lint"], "choices": {"docs": True}})
+        self.assertEqual(self.accepted("src/a.ts"), set())
+
+    def test_a_folder_of_the_config_counts_its_test_and_declaration_files(self) -> None:
+        # A real run of smalldocs 0.5.12 with entry: ../src put the items of src/app.test.ts and src/shapes.d.ts on
+        # the API pages, because TypeDoc expands the folder. The default entry src leaves them out, as api-check does.
+        for name in ("src/a.ts", "src/a.test.ts", "src/s.d.ts", "src/gen.ts", "lib/c.test.ts"):
+            self.write(name)
+        self.write(".agents/generated.txt", "src/gen.ts\n")
+        self.commit()
+        self.write("docs/_smalldocs.yml", "api:\n  language: typescript\n  entry: ../src\n")
+        self.assertEqual(self.accepted("src/a.ts", "src/a.test.ts", "src/s.d.ts", "src/gen.ts", "lib/c.test.ts"),
+                         {"src/a.ts", "src/a.test.ts", "src/s.d.ts"})
+        # A test file that the config names as an entry counts too.
+        self.write("docs/_smalldocs.yml", "api:\n  language: typescript\n  entry: [../src, ../lib/c.test.ts]\n")
+        self.assertEqual(self.accepted("lib/c.test.ts"), {"lib/c.test.ts"})
+
+    def test_the_default_folder_leaves_out_test_and_declaration_files(self) -> None:
+        for name in ("src/a.ts", "src/a.test.ts", "src/s.d.ts"):
+            self.write(name)
+        self.assertEqual(self.accepted("src/a.ts", "src/a.test.ts", "src/s.d.ts"), {"src/a.ts"})
 
     def test_a_null_api_key_takes_the_default(self) -> None:
         self.write("src/a.ts")
