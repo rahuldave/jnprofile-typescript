@@ -5,7 +5,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!dist", "!node_modules", "!.agents", "!.claude", "!.codex"]
+    "includes": ["**", "!dist", "!node_modules", "!.agents", "!.claude", "!.codex", "!**/*.md"]
   },
   "formatter": {
     "indentStyle": "space",

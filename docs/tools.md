@@ -28,7 +28,7 @@ The package is `@biomejs/biome@2`.
 | `just fmt-check` | Fails when biome would change the format of a file. It changes no file. It is a step of `just check` |
 | `just lint` | Checks the code against the rules of biome. Extra arguments go to biome: `just lint --write` |
 
-The part is an include in `biome.json`. Its `extends` names `./.agents/config/typescript/lint.json`. That file makes biome read the ignore file of git, so biome skips the files that git ignores. It leaves out `dist`, `node_modules`, `.agents`, `.claude` and `.codex`. It also sets the formatter to indent with spaces and to keep lines to at most 120 characters.
+The part is an include in `biome.json`. Its `extends` names `./.agents/config/typescript/lint.json`. That file makes biome read the ignore file of git, so biome skips the files that git ignores. It leaves out `dist`, `node_modules`, `.agents`, `.claude` and `.codex`, and the Markdown pages, which `prose-check` checks. A project that sets its own `files.includes` in `biome.json` replaces that list, so it must repeat these exclusions. It also sets the formatter to indent with spaces and to keep lines to at most 120 characters.
 
 ## typecheck
 
