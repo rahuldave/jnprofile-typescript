@@ -4,6 +4,7 @@ The projects of the tests share one node_modules and one cache of npm, which the
 project needs no install of its own. Each project links them in.
 """
 
+import io
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 REPO = Path(__file__).resolve().parents[1]
 FOLDER = REPO / ".agents/just/typescript"
@@ -760,11 +762,361 @@ class IntegrationTests(Project):
         self.assertIn("✔ twice", out)
 
 
+# A file with a module comment, a JSDoc comment with @returns, and a comment after each parameter, as biome
+# formats it.
+DOCUMENTED = ("/**\n * The arithmetic of the app.\n * @module\n */\n\n/**\n * Add two numbers.\n"
+              " * @returns the sum\n */\nexport function add(\n  a: number, // the first number\n"
+              "  b: number, // the second number\n): number {\n  return a + b;\n}\n")
+# The same function with JSDoc tags in place of the comments after the parameters.
+TAGGED = ("/**\n * The arithmetic of the app.\n * @module\n */\n\n/**\n * Add two numbers.\n"
+          " * @param a the first number\n * @param b the second number\n * @returns the sum\n */\n"
+          "export function add(a: number, b: number): number {\n  return a + b;\n}\n")
+# A checker of nossaifd for the tests: it prints the path and the text of each page, and fails on the word WRONGWORD.
+CHECKER = ("import sys\nfrom pathlib import Path\nbad = False\nfor name in sys.argv[1:]:\n"
+           "    text = Path(name).read_text()\n    print('PAGE', name)\n    print(text)\n"
+           "    bad = bad or 'WRONGWORD' in text\nsys.exit(1 if bad else 0)\n")
+# A gate of nossaifd for the tests: base_commit gives the commit that the option names, and CI is never set.
+GATE = ("import subprocess\n\ndef ci_set():\n    return False\n\ndef base_commit(root, option):\n"
+        "    run = subprocess.run(['git', 'rev-parse', '--verify', '-q', option + '^{commit}'], cwd=root,\n"
+        "                         capture_output=True, text=True)\n"
+        "    return (run.stdout.strip(), option) if run.returncode == 0 else (None, 'no commit ' + option)\n")
+
+
+@unittest.skipUnless(TOOLS, "needs just, uv and git")
+class ApiTests(Project):
+    """A project with the api tool, whose src/app.ts has the function add."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        (self.root / ".agents/just/typescript.just").write_text(MODULE + "import? 'typescript/api.just'\n")
+
+    def prose_role(self) -> None:
+        """Install the checker of nossaifd of the tests, as the prose role installs the real one."""
+        self.write(".agents/skills/nossaifd/scripts/check.py", CHECKER)
+
+    def test_an_exported_function_with_no_jsdoc_or_comments_fails_api_check(self) -> None:
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 1, out)
+        self.assertIn("api-check: smalldocs api check, with the entry the 1 code files in src/", out)
+        self.assertIn("app:add(a): no comment", out)
+        self.assertIn("app: no module comment", out)
+        self.assertIn("a JSDoc comment", out)
+
+    def test_comments_after_the_parameters_or_jsdoc_tags_pass_api_check(self) -> None:
+        for text in (DOCUMENTED, TAGGED):
+            with self.subTest(text=text[:60]):
+                self.write("src/app.ts", text)
+                code, out = self.just("typescript::api-check")
+                self.assertEqual(code, 0, out)
+                # biome keeps each comment where it is.
+                code, out_fmt = self.just("typescript::fmt-check")
+                self.assertEqual(code, 0, out_fmt)
+        # The test file is no part of the API, though it has no JSDoc.
+        self.assertNotIn("app.test", out)
+
+    def test_the_entry_is_src_index_ts_when_it_exists(self) -> None:
+        self.write("src/app.ts", DOCUMENTED)
+        # A file that the index does not export is no part of the API.
+        self.write("src/hidden.ts", "export function hidden(a: number): number {\n  return a;\n}\n")
+        self.write("src/index.ts", '/**\n * The package.\n * @module\n */\nexport * from "./app.js";\n')
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 0, out)
+        self.assertIn("with the entry src/index.ts", out)
+        self.write("src/index.ts", '/**\n * The package.\n * @module\n */\nexport * from "./app.js";\n'
+                                   'export * from "./hidden.js";\n')
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 1, out)
+        self.assertIn("hidden", out)
+
+    def test_a_project_with_no_code_in_src_has_no_api_to_check(self) -> None:
+        shutil.rmtree(self.root / "src")
+        self.write("lib/x.ts", "export const x = 1;\n")
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 0, out)
+        self.assertIn("so there is no API to check", out)
+
+    def test_the_key_api_of_the_docs_config_names_the_entry(self) -> None:
+        self.write("src/app.ts", DOCUMENTED)
+        # The default entry, each code file in src, would take this file too.
+        self.write("src/other.ts", "export function other(a: number): number {\n  return a;\n}\n")
+        self.write("docs/_smalldocs.yml", "api:\n  language: typescript\n  entry: ../src/app.ts\n"
+                                          "  tsconfig: ../tsconfig.json\n  out: api\n")
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 0, out)
+        self.assertIn("with the TypeScript sections of the api settings of docs/_smalldocs.yml", out)
+        self.assertEqual(sorted(path.name for path in (self.root / "docs").iterdir()), ["_smalldocs.yml"])
+        (self.root / "docs/_smalldocs.yml").unlink()
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 1, out)
+        self.assertIn("other", out)
+        self.assertNotIn("docs/api", self.git("status", "--porcelain", "--untracked-files=all"))
+
+    def checked(self, out: str) -> list:
+        """The pages that the checker of the tests got, as their paths, from the output OUT."""
+        return [line.split(" ", 1)[1] for line in out.splitlines() if line.startswith("PAGE ") and "/modules/" not in line]
+
+    def test_a_changed_file_with_a_space_or_a_letter_outside_ascii_in_its_name_is_checked(self) -> None:
+        self.prose_role()
+        for name in ("src/my file.ts", "src/über.ts"):
+            self.write(name, DOCUMENTED)
+        self.commit()
+        for name in ("src/my file.ts", "src/über.ts"):
+            with self.subTest(name=name):
+                self.git("checkout", "--", ".")
+                self.write(name, DOCUMENTED.replace("the first number", "the WRONGWORD number"))
+                code, out = self.just("typescript::api-prose-check")
+                self.assertEqual(code, 1, out)
+                self.assertEqual(len(self.checked(out)), 1, out)
+
+    def test_a_root_in_the_docs_config_does_not_hide_the_changed_files(self) -> None:
+        self.prose_role()
+        self.write("docs/_smalldocs.yml", "api:\n  language: typescript\n  root: ..\n  entry: ../src/app.ts\n"
+                                          "  tsconfig: ../tsconfig.json\n  out: api\n")
+        self.commit()
+        self.write("src/app.ts", DOCUMENTED.replace("the first number", "the WRONGWORD number"))
+        code, out = self.just("typescript::api-prose-check")
+        self.assertEqual(code, 1, out)
+        self.assertIn("the API pages app,", out)
+
+    def test_the_page_of_an_unchanged_file_with_the_same_end_of_path_is_not_checked(self) -> None:
+        self.prose_role()
+        self.write("src/app.ts", DOCUMENTED)
+        self.write("src/nested/src/app.ts", DOCUMENTED.replace("the first number", "the WRONGWORD number"))
+        self.commit()
+        self.write("src/app.ts", DOCUMENTED.replace("Add two numbers.", "Add two numbers, a and b."))
+        code, out = self.just("typescript::api-prose-check")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(self.checked(out)), 1, out)
+        self.assertNotIn("WRONGWORD", out)
+
+    def test_the_module_comment_of_a_changed_index_that_only_exports_again_is_checked(self) -> None:
+        self.prose_role()
+        self.write("src/app.ts", DOCUMENTED)
+        self.write("src/index.ts", '/**\n * The package.\n * @module\n */\nexport * from "./app.js";\n')
+        self.commit()
+        self.write("src/index.ts", '/**\n * The WRONGWORD package.\n * @module\n */\nexport * from "./app.js";\n')
+        code, out = self.just("typescript::api-prose-check")
+        self.assertEqual(code, 1, out)
+        self.assertIn("the module comment of src/index", out)
+        self.assertIn("The WRONGWORD package.", out)
+        self.assertNotIn("@module", out.split("api-prose-check: the API pages", 1)[1])
+
+    def test_two_changed_files_whose_pages_have_one_flat_name_are_both_checked(self) -> None:
+        self.prose_role()
+        self.commit()
+        self.write("src/a.b.ts", DOCUMENTED)
+        self.write("src/a/b.ts", DOCUMENTED.replace("add", "plus"))
+        code, out = self.just("typescript::api-prose-check")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(self.checked(out)), 2, out)
+
+    def test_the_module_comment_of_a_changed_file_with_items_is_checked(self) -> None:
+        self.prose_role()
+        self.commit()
+        self.write("src/other.ts", DOCUMENTED.replace("The arithmetic of the app.", "Other helpers that WRONGWORD add.")
+                   .replace("add", "plus"))
+        code, out = self.just("typescript::api-prose-check")
+        self.assertEqual(code, 1, out)
+        self.assertIn("the module comment of src/other", out)
+
+    def test_the_module_comment_of_a_changed_file_outside_the_api_is_not_checked(self) -> None:
+        self.prose_role()
+        self.write("src/app.ts", DOCUMENTED)
+        self.write("src/index.ts", '/**\n * The package.\n * @module\n */\nexport * from "./app.js";\n')
+        self.commit()
+        self.write("src/internal.ts", "/**\n * The WRONGWORD inside.\n * @module\n */\n\n/** One. */\n"
+                                      "export const one = 1;\n")
+        self.write("src/index.ts", '/**\n * The whole package.\n * @module\n */\nexport * from "./app.js";\n')
+        code, out = self.just("typescript::api-prose-check")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("WRONGWORD", out)
+        # The comment of the index is checked once.
+        self.assertEqual(out.count("The whole package."), 1, out)
+
+    def test_a_plain_opening_comment_before_an_import_is_the_module_comment(self) -> None:
+        self.prose_role()
+        self.commit()
+        text = ('/** The arithmetic of the WRONGWORD app. */\nimport { strict } from "node:assert";\n\n'
+                + DOCUMENTED.split(" */\n\n", 1)[1].replace("return a + b;", "strict.ok(true);\n  return a + b;"))
+        self.write("src/app.ts", text)
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 1, out)
+        self.assertNotIn("no module comment", out)
+        self.assertIn("The arithmetic of the WRONGWORD app.", out)
+        self.assertIn("the module comment of src/app.ts", out)
+
+    def test_an_index_tsx_is_the_entry_too(self) -> None:
+        self.write("src/app.ts", DOCUMENTED)
+        self.write("src/hidden.ts", "export function hidden(a: number): number {\n  return a;\n}\n")
+        self.write("src/index.tsx", '/**\n * The package.\n * @module\n */\nexport * from "./app.js";\n')
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 0, out)
+        self.assertIn("with the entry src/index.tsx", out)
+
+    def test_only_the_typescript_sections_of_the_docs_config_count(self) -> None:
+        self.write("src/app.ts", DOCUMENTED)
+        self.write("src/other.ts", "export function other(a: number): number {\n  return a;\n}\n")
+        python = "  - packages: [mypkg]\n    out: py\n"
+        self.write("docs/_smalldocs.yml", "api:\n" + python + "  - language: typescript\n    entry: ../src/app.ts\n"
+                                          "    tsconfig: ../tsconfig.json\n    out: ts\n")
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 0, out)
+        self.assertIn("with the TypeScript sections of the api settings of docs/_smalldocs.yml", out)
+        # A config with only a Python section is no config of the TypeScript API, so the default entry counts.
+        self.write("docs/_smalldocs.yml", "api:\n" + python)
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 1, out)
+        self.assertIn("with the entry the 2 code files in src/", out)
+        self.assertIn("other", out)
+
+    def test_a_flow_map_of_typescript_settings_counts_and_broken_yaml_fails_with_a_message(self) -> None:
+        self.write("src/app.ts", DOCUMENTED)
+        self.write("src/other.ts", "export function other(a: number): number {\n  return a;\n}\n")
+        self.write("docs/_smalldocs.yml", "api: {language: typescript, entry: ../src/app.ts, "
+                                          "tsconfig: ../tsconfig.json, out: api}\n")
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 0, out)
+        self.assertIn("with the TypeScript sections of the api settings of docs/_smalldocs.yml", out)
+        self.write("docs/_smalldocs.yml", "api: [unclosed\n")
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 2, out)
+        self.assertIn("docs/_smalldocs.yml cannot be read", out)
+
+    def test_a_failure_of_smalldocs_or_uv_names_its_exit_code(self) -> None:
+        steps = load_steps()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, REPO)
+        real = steps.subprocess.run
+
+        def run(args, **kwargs):
+            if args[:1] == ["uv"] and "smalldocs" in args and "check" in args:
+                return subprocess.CompletedProcess(args, 2)
+            return real(args, **kwargs)
+
+        steps.subprocess.run = run
+        self.addCleanup(setattr, steps.subprocess, "run", real)
+        with unittest.mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+            self.assertEqual(steps.api("check"), 2)
+        self.assertIn("smalldocs or uv failed with the exit code 2", err.getvalue())
+
+    def test_api_prose_check_passes_without_the_prose_role(self) -> None:
+        code, out = self.just("typescript::api-prose-check")
+        self.assertEqual(code, 0, out)
+        self.assertIn("no checker of nossaifd", out)
+
+    def test_api_prose_check_checks_the_page_of_each_changed_file_outside_the_project(self) -> None:
+        self.prose_role()
+        self.write("src/app.ts", DOCUMENTED)
+        self.write("src/other.ts", DOCUMENTED.replace("add", "other"))
+        self.commit()
+        self.write("src/app.ts", DOCUMENTED.replace("the first number", "the WRONGWORD number"))
+        code, out = self.just("typescript::api-prose-check")
+        self.assertEqual(code, 1, out)
+        self.assertIn("api-prose-check: the API pages app, the module comment of src/app.ts, of the files changed since HEAD", out)
+        self.assertIn("the WRONGWORD number", out)
+        self.assertNotIn("function other", out)
+        pages = [line.split(" ", 1)[1] for line in out.splitlines() if line.startswith("PAGE ")]
+        # The page of app.ts and its module comment.
+        self.assertEqual(len(pages), 2, out)
+        for page in pages:
+            self.assertFalse(Path(page).resolve().is_relative_to(self.root), pages)
+        self.assertIn("fix each hard problem in the JSDoc comment", out)
+        self.assertEqual(self.git("status", "--porcelain", "--untracked-files=all"), " M src/app.ts\n")
+
+    def test_api_prose_check_reads_the_key_api_of_the_docs_config_and_writes_nothing_there(self) -> None:
+        self.prose_role()
+        self.write("docs/_smalldocs.yml", "api:\n  - language: typescript\n    entry: ../src/app.ts\n"
+                                          "    tsconfig: ../tsconfig.json\n    out: reference\n"
+                                          "    source: https://example.com/x\n")
+        self.commit()
+        self.write("src/app.ts", DOCUMENTED)
+        code, out = self.just("typescript::api-prose-check")
+        self.assertEqual(code, 0, out)
+        self.assertIn("the API pages app, the module comment of src/app.ts, of the files changed since HEAD", out)
+        self.assertEqual(sorted(path.name for path in (self.root / "docs").iterdir()), ["_smalldocs.yml"])
+
+    def test_api_prose_check_with_no_changed_code_passes(self) -> None:
+        self.prose_role()
+        self.commit()
+        code, out = self.just("typescript::api-prose-check")
+        self.assertEqual(code, 0, out)
+        self.assertIn("no code changed since HEAD", out)
+
+    def test_api_check_runs_api_prose_check_once_in_a_run(self) -> None:
+        self.prose_role()
+        self.commit()
+        self.write("src/app.ts", DOCUMENTED)
+        env = dict(self.env, JLOG_RUN="run-1")
+        code, out = self.just("typescript::api-check", env=env)
+        self.assertEqual(code, 0, out)
+        self.assertIn("api-prose-check: the API pages app", out)
+        code, out = self.just("typescript::api-prose-check", env=env)
+        self.assertEqual(code, 0, out)
+        self.assertIn("api-prose-check: it passed before in this run, run-1, on this tree", out)
+        # Another base is another run.
+        self.write(".agents/skills/nossaifd/scripts/prose_gate.py", GATE)
+        code, out = self.just("typescript::api-prose-check", "--base", "HEAD", env=env)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("it passed before", out)
+
+    def test_api_prose_check_with_a_base_takes_the_changes_since_the_base_from_the_gate(self) -> None:
+        self.prose_role()
+        self.write(".agents/skills/nossaifd/scripts/prose_gate.py", GATE)
+        self.commit()
+        self.write("src/app.ts", DOCUMENTED)
+        self.commit()
+        # The tree is clean, so only a base shows the change of the last commit.
+        code, out = self.just("typescript::api-prose-check")
+        self.assertIn("no code changed since HEAD", out)
+        code, out = self.just("typescript::api-prose-check", "--base", "HEAD~1")
+        self.assertEqual(code, 0, out)
+        self.assertIn("the API pages app, the module comment of src/app.ts, of the files changed since HEAD~1", out)
+        code, out = self.just("typescript::api-prose-check", "--base", "nothing")
+        self.assertEqual(code, 2, out)
+        self.assertIn("no commit nothing", out)
+        self.assertFalse(list((self.root / ".agents/skills").rglob("__pycache__")))
+
+    def test_a_base_without_the_gate_of_nossaifd_fails(self) -> None:
+        self.prose_role()
+        code, out = self.just("typescript::api-prose-check", "--base", "main")
+        self.assertEqual(code, 2, out)
+        self.assertIn("needs base_commit", out)
+
+
+class ModuleCommentTests(unittest.TestCase):
+    def test_the_module_comment_follows_the_rule_of_smalldocs(self) -> None:
+        steps = load_steps()
+        cases = {
+            '/** M. */\nimport x from "y";\n': "M.",
+            "/** D. */\nexport function f() {}\n": None,
+            '/** The mod. */\nexport * as ns from "./a.js";\n': "The mod.",
+            '/** The mod. */\nexport type * from "./a.js";\n': "The mod.",
+            '/**/\n/** The mod. */\nimport x from "y";\n': "The mod.",
+            "/** The mod. */\nexport type { A };\n": None,
+            "/**\n * T.\n * @module\n */\nexport const a = 1;\n": "T.",
+            "/** A. */\n/** B. */\nexport const b = 1;\n": "A.",
+            '#!/usr/bin/env node\n/* MIT */\n// x\n/** L. */\n"use client";\n': "L.",
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            for text, want in cases.items():
+                with self.subTest(text=text):
+                    path = Path(folder) / "f.ts"
+                    path.write_text(text)
+                    self.assertEqual(steps.module_comment(path), want)
+
+
 class ProfileTests(unittest.TestCase):
     def test_the_code_and_test_globs_of_the_steps_are_those_of_the_profile(self) -> None:
         steps = load_steps()
         self.assertEqual(list(steps.CODE), PROFILE["code"])
         self.assertEqual(list(steps.TESTS), PROFILE["tests"])
+
+    def test_each_package_of_docstring_check_that_typescript_eslint_releases_is_pinned(self) -> None:
+        # eslint-plugin-jsdoc takes the utils of typescript-eslint as ^8.72.0. A release whose own packages npm cannot
+        # find yet stopped the step, so the utils are pinned to the version of the parser.
+        steps = load_steps()
+        pins = dict(package.rsplit("@", 1) for package in steps.ESLINT)
+        self.assertEqual(pins["@typescript-eslint/utils"], pins["@typescript-eslint/parser"])
 
     def test_each_step_is_in_the_verify_of_its_tool(self) -> None:
         tools = PROFILE["tools"]
@@ -778,8 +1130,10 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(tools["integration"]["lines"], tools["test"]["lines"])
         self.assertIn("c8@12", tools["test"]["packages"])
         self.assertIn(".jnprofile-typescript/", tools["test"]["lines"][".gitignore"])
-        self.assertEqual(PROFILE["default_tools"], ["lint", "typecheck", "test", "docstring"])
-        self.assertNotIn("api", tools)
+        self.assertEqual(PROFILE["default_tools"], ["lint", "typecheck", "test", "docstring", "api"])
+        self.assertEqual(tools["api"]["verify"], ["api-check"])
+        self.assertEqual(tools["api"]["recipes"], "api.just")
+        self.assertEqual(tools["api"]["packages"], [])
 
     def test_the_package_installs_the_recipes_and_the_language_layer(self) -> None:
         package = json.loads((REPO / "skill-package.json").read_text())
@@ -796,7 +1150,8 @@ class ProfileTests(unittest.TestCase):
             shutil.copytree(FOLDER, root / "typescript")
             (root / "typescript.just").write_text(MODULE.replace("import? ", "import ") +
                                                   "import 'typescript/typecheck.just'\n"
-                                                  "import 'typescript/integration.just'\n")
+                                                  "import 'typescript/integration.just'\n"
+                                                  "import 'typescript/api.just'\n")
             dump = json.loads(subprocess.run(["just", "--justfile", str(root / "typescript.just"), "--dump",
                                               "--dump-format", "json"], capture_output=True, text=True,
                                              check=True).stdout)
