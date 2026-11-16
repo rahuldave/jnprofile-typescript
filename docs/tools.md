@@ -176,7 +176,17 @@ The settings of `api-check`:
 - **With no index and no code file in `src/`**, the step passes and says that there is no API to check.
 - **When TypeDoc fails**, smalldocs exits with 2, and the step says so. An example is an entry that `tsconfig.json` does not find.
 
-The files of the API are the code files in `src/` with the default settings, because the entry and the files that it exports are there. With a key `api`, they are the entry files and the code files in their folders. The alias `@api` of the commit gates is to name these files. The gate does not fill `@api` yet, so no target needs them now.
+The rule of the API files:
+
+- **The file.** The profile installs `.agents/just/typescript/api_rule.py` with its recipes. The installer keeps `.agents/just/` for itself, so a tool of `profile.json` cannot own a file there. The file comes with the folder that `skill-package.json` installs, also without the `api` tool.
+- **The function.** `is_api(path)` is True when the path, relative to the top of the project, is a source file of the API pages. The commit gate of agent_gest_git_skills loads the file from the parent commit. It calls `is_api` on each changed path, to fill the alias `@api`.
+- **How it runs.** It uses only the Python standard library, on Python 3.9 or later, under `python -I -B`, at the top of the project. It reads git with `git show` and `git ls-files`, and it writes no file.
+- **Without the `api` tool or the docs role**, as `.agents/stack.json` records them, `is_api` is False for each path.
+- **The entry** comes from the TypeScript sections of the key `api` of `docs/_smalldocs.yml`. Without a TypeScript section, the entry is the same as for `api-check`. It is the index of `src`, or else the folder `src`. A TypeScript section with no `entry` also takes that entry. The rule reads the file without PyYAML. It reads maps, lists, flow lists such as `[a, b]` and flow maps such as `{a: 1}`, also over several lines. It reads plain or quoted values and comments.
+- **A broken config.** When the rule cannot read `docs/_smalldocs.yml` or `.agents/stack.json`, `is_api` is False for each path. It does not stop the gate. The rule does not read anchors such as `&name`, tags such as `!!map` or block values such as `|`. A config with one of them is a config that the rule cannot read.
+- **The files that count.** An entry file counts. A file that an entry file imports or exports again with a relative path, such as `./app.js` or `require("./app")`, also counts, and so do the files that those files import. Each code file in an entry folder counts.
+- **The files that never count** are the test files, the declaration files, the files that `.agents/generated.txt` of the parent commit names and the files in `.agents/`, `.claude/`, `.codex/` and `node_modules`.
+- **A limit.** The rule follows only relative paths. An import through a path alias of `tsconfig.json`, such as `@/app`, does not count. Then name the file as an entry, or name its folder.
 
 Where the checks run:
 

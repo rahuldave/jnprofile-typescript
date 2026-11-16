@@ -4,6 +4,7 @@ The projects of the tests share one node_modules and one cache of npm, which the
 project needs no install of its own. Each project links them in.
 """
 
+import ast
 import io
 import json
 import os
@@ -1169,6 +1170,271 @@ class ProfileTests(unittest.TestCase):
                 for line in recipe["body"]:
                     self.assertFalse(isinstance(line[0], str) and line[0].lstrip("@").startswith("-"), line)
             todo += [dep["recipe"] for dep in recipe["dependencies"]]
+
+
+RULE = FOLDER / "api_rule.py"
+# The script that loads the rule as the gate does: from a copy outside the project, in a Python of its own, with the
+# top of the repository as the current folder. It prints the paths of standard input that is_api accepts.
+LOADER = ("import importlib.util, sys\n"
+          "spec = importlib.util.spec_from_file_location('api_rule', sys.argv[1])\n"
+          "module = importlib.util.module_from_spec(spec)\n"
+          "spec.loader.exec_module(module)\n"
+          "for path in sys.stdin.read().split():\n"
+          "    print(path, module.is_api(path))\n")
+# The script that prints the key api of the docs config, as the rule reads it, as JSON.
+PARSE = ("import importlib.util, json, sys\n"
+         "spec = importlib.util.spec_from_file_location('api_rule', sys.argv[1])\n"
+         "module = importlib.util.module_from_spec(spec)\n"
+         "spec.loader.exec_module(module)\n"
+         "print(json.dumps(module._api_settings()))\n")
+# The same, as PyYAML reads it.
+YAML_API = ("import json, yaml\n"
+            "print(json.dumps((yaml.safe_load(open('docs/_smalldocs.yml')) or {}).get('api')))\n")
+ON = {"tools": ["typescript:lint", "typescript:api"], "choices": {"docs": True}}
+
+
+class ApiRuleTests(unittest.TestCase):
+    """api_rule.py, as the commit gate loads it, in a project in a temporary folder."""
+
+    def setUp(self) -> None:
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(os.path.realpath(temp.name)) / "app"
+        self.root.mkdir()
+        # The gate loads the rule of the parent commit, so the copy is outside the project.
+        self.rule = Path(temp.name) / "rule.py"
+        shutil.copy(RULE, self.rule)
+        self.stack(ON)
+        self.git("init", "-q")
+
+    def git(self, *args: str) -> str:
+        return subprocess.run(["git", "-c", "user.name=T", "-c", "user.email=t@example.invalid", "-c",
+                               "commit.gpgsign=false", *args], cwd=self.root, capture_output=True, text=True,
+                              check=True).stdout
+
+    def commit(self) -> None:
+        """Commit the project, so that it is the parent commit of the next change."""
+        self.git("add", "-A")
+        self.git("commit", "-q", "--no-verify", "-m", "c")
+
+    def write(self, name: str, text: str = "export const x = 1;\n") -> None:
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+
+    def stack(self, record) -> None:
+        self.write(".agents/stack.json", json.dumps(record))
+
+    def accepted(self, *paths: str, python: list = None) -> set:
+        """The PATHS that is_api accepts, from a run of the rule as the gate runs it."""
+        before = sorted(str(path) for path in self.root.rglob("*"))
+        run = subprocess.run([*(python or [sys.executable]), "-I", "-B", "-c", LOADER, str(self.rule)],
+                             input="\n".join(paths), cwd=self.root, capture_output=True, text=True, check=True)
+        self.assertEqual(sorted(str(path) for path in self.root.rglob("*")), before, "the rule wrote a file")
+        answers = dict(line.rsplit(" ", 1) for line in run.stdout.splitlines())
+        self.assertEqual(set(answers), set(paths), run.stderr)
+        return {path for path, answer in answers.items() if answer == "True"}
+
+    def test_the_index_and_the_files_that_it_reaches_are_the_api(self) -> None:
+        self.write("src/index.ts", '/** The package. */\nexport * from "./app.js";\nexport { b } from "./lib";\n')
+        self.write("src/app.ts", 'import { u } from "./util/helper.js";\nimport type { T } from "./types.js";\n'
+                                 'export const a = u;\n')
+        self.write("src/util/helper.ts")
+        self.write("src/types.ts", "export type T = 1;\n")
+        self.write("src/lib/index.ts", "export const b = 1;\n")
+        self.write("src/internal.ts")
+        self.write("src/app.test.ts", 'import { a } from "./app.js";\n')
+        self.write("src/shapes.d.ts", "export type S = 1;\n")
+        self.write("src/gen/out.ts")
+        self.write("src/app.ts", 'import { u } from "./util/helper.js";\nimport "./gen/out.js";\nexport const a = u;\n'
+                                 'import type { T } from "./types.js";\n')
+        self.write(".agents/generated.txt", "# generated\nsrc/gen\n")
+        self.commit()
+        paths = ("src/index.ts", "src/app.ts", "src/util/helper.ts", "src/types.ts", "src/lib/index.ts",
+                 "src/internal.ts", "src/app.test.ts", "src/shapes.d.ts", "src/gen/out.ts", "README.md",
+                 ".agents/just/x.ts", "./src/app.ts")
+        self.assertEqual(self.accepted(*paths), {"src/index.ts", "src/app.ts", "src/util/helper.ts", "src/types.ts",
+                                                 "src/lib/index.ts", "./src/app.ts"})
+
+    def test_an_index_tsx_is_the_entry_and_a_jsx_import_names_a_tsx_file(self) -> None:
+        self.write("src/index.tsx", 'export * from "./Button.jsx";\n')
+        self.write("src/Button.tsx")
+        self.write("src/other.ts")
+        self.assertEqual(self.accepted("src/index.tsx", "src/Button.tsx", "src/other.ts"),
+                         {"src/index.tsx", "src/Button.tsx"})
+
+    def test_without_an_index_each_code_file_in_src_is_the_api(self) -> None:
+        self.write("src/a.ts")
+        self.write("src/deep/b.mts")
+        self.write("lib/c.ts")
+        # A file that is gone, as a deleted path that the gate gets, is in src all the same.
+        self.assertEqual(self.accepted("src/a.ts", "src/deep/b.mts", "src/gone.ts", "lib/c.ts", "src/a.test.ts"),
+                         {"src/a.ts", "src/deep/b.mts", "src/gone.ts"})
+
+    def test_the_typescript_sections_of_the_docs_config_name_the_entry(self) -> None:
+        self.write("src/index.ts", 'export * from "./a.js";\n')
+        self.write("src/a.ts")
+        self.write("lib/main.ts", 'export * from "./part.js";\n')
+        self.write("lib/part.ts")
+        self.write("tools/x.ts")
+        configs = (
+            "api:\n  language: typescript\n  entry: ../lib/main.ts\n  out: api\n",
+            "api: {language: typescript, entry: '../lib/main.ts', out: api}\n",
+            "api:\n  - packages: [mypkg]\n    out: py\n  - language: \"typescript\"  # the TypeScript API\n"
+            "    entry:\n      - ../lib/main.ts\n    out: ts\n",
+            "project:\n  type: website\napi:\n  - {language: typescript, entry: [../lib/main.ts]}\n",
+        )
+        for config in configs:
+            with self.subTest(config=config):
+                self.write("docs/_smalldocs.yml", config)
+                self.assertEqual(self.accepted("lib/main.ts", "lib/part.ts", "src/a.ts", "tools/x.ts"),
+                                 {"lib/main.ts", "lib/part.ts"})
+        # An entry that is a folder holds the API.
+        self.write("docs/_smalldocs.yml", "api:\n  language: typescript\n  entry: ../tools\n")
+        self.assertEqual(self.accepted("tools/x.ts", "lib/main.ts"), {"tools/x.ts"})
+
+    def test_a_config_with_no_typescript_section_or_no_api_key_takes_the_default(self) -> None:
+        self.write("src/a.ts")
+        for config in ("api:\n  packages: [mypkg]\n", "project:\n  type: website\n"):
+            with self.subTest(config=config):
+                self.write("docs/_smalldocs.yml", config)
+                self.assertEqual(self.accepted("src/a.ts", "lib/b.ts"), {"src/a.ts"})
+
+    def test_a_broken_config_gives_false_and_no_error(self) -> None:
+        self.write("src/a.ts")
+        for config in ("api: [unclosed\n", "api:\n\tlanguage: typescript\n", "api:\n  language: typescript\n x: 1\n"):
+            with self.subTest(config=config):
+                self.write("docs/_smalldocs.yml", config)
+                self.assertEqual(self.accepted("src/a.ts"), set())
+        for record in ("{not json", "[1, 2]"):
+            with self.subTest(record=record):
+                self.write("docs/_smalldocs.yml", "project:\n  type: website\n")
+                self.write(".agents/stack.json", record)
+                self.assertEqual(self.accepted("src/a.ts"), set())
+
+    def test_without_the_api_tool_or_the_docs_role_no_path_is_the_api(self) -> None:
+        self.write("src/a.ts")
+        for record in ({"tools": ["typescript:lint"], "choices": {"docs": True}},
+                       {"tools": ["typescript:api"], "choices": {"docs": False}}, {}):
+            with self.subTest(record=record):
+                self.stack(record)
+                self.assertEqual(self.accepted("src/a.ts"), set())
+        (self.root / ".agents/stack.json").unlink()
+        self.assertEqual(self.accepted("src/a.ts"), set())
+
+    def test_the_yaml_forms_of_pyyaml_name_the_entry(self) -> None:
+        self.write("src/index.ts", 'export * from "./a.js";\n')
+        self.write("src/a.ts")
+        self.write("lib/main.ts", 'export * from "./part.js";\n')
+        self.write("lib/part.ts")
+        configs = (
+            "api: # the API\n  language: typescript\n  entry: ../lib/main.ts\n",
+            "api:\n  language: typescript\n  entry: # the entries\n    - ../lib/main.ts\n",
+            "api:\n  language: typescript\n  entry:\n  - ../lib/main.ts\n  out: api\n",
+            "api:\n- language: typescript\n  entry:\n  - ../lib/main.ts\n",
+            "api:\n  language: typescript\n  entry: [\n    ../lib/main.ts,\n    ../lib/part.ts\n  ]\n",
+            "api: {\n  language: typescript,\n  entry: ../lib/main.ts\n}\n",
+            "api:\n  language: typescript\n  entry: [../lib/main.ts]  # don't follow src\n",
+            "api:\n  -   language: typescript\n      entry: ../lib/main.ts\n",
+            "---\napi:\n  language: 'typescript'\n  entry: \"../lib/main.ts\"\n...\n",
+            "api:\n  language: typescript\n  entry: ../src/a.ts\napi:\n  language: typescript\n  entry: ../lib/main.ts\n",
+            "api:\r\n  language: typescript\r\n  entry: ../lib/main.ts\r\n",
+        )
+        for config in configs:
+            with self.subTest(config=config):
+                self.write("docs/_smalldocs.yml", config)
+                self.assertEqual(self.accepted("lib/main.ts", "lib/part.ts", "src/a.ts"),
+                                 {"lib/main.ts", "lib/part.ts"})
+
+    def test_the_parser_reads_the_api_key_as_pyyaml_reads_it(self) -> None:
+        python = ["uv", "run", "--no-project", "--quiet", "--with", "pyyaml", "python"]
+        if not shutil.which("uv"):
+            self.skipTest("no uv to run PyYAML")
+        configs = (
+            "api:\n  language: typescript\n  entry: ../src/a.ts\n  out: api\n",
+            "api: # c\n  - packages: [a, 'b c']\n    out: py\n  - language: \"typescript\"  # c\n    entry:\n"
+            "    - ../a.ts\n    - '../b # c.ts'\n",
+            "project:\n  type: website\napi:\n  - {language: typescript, entry: [../a.ts, \"../b.ts\"], out: x}\n"
+            "nav:\n  - a.md\n",
+            "api: {language: typescript,\n  entry: [../a.ts,\n    ../b.ts]}\n",
+            "api:\n  -   language: typescript\n      entry: ../a.ts\n  - language: python\n",
+            "api: ~\n", "api:\n", "api: null\n", "project: {a: 1}\n",
+            "api:\n  entry: ../it's.ts\n  language: typescript\n",
+        )
+        for config in configs:
+            with self.subTest(config=config):
+                self.write("docs/_smalldocs.yml", config)
+                ours = subprocess.run([sys.executable, "-I", "-B", "-c", PARSE, str(self.rule)], cwd=self.root,
+                                      capture_output=True, text=True, check=True).stdout
+                theirs = subprocess.run([*python, "-I", "-c", YAML_API], cwd=self.root, capture_output=True, text=True,
+                                        check=True).stdout
+                self.assertEqual(json.loads(ours), json.loads(theirs))
+
+    def test_yaml_that_the_rule_does_not_read_gives_false(self) -> None:
+        self.write("src/a.ts")
+        for config in ("api: &ts\n  language: typescript\n", "api: !!map\n  language: typescript\n",
+                       "api:\n  entry: |\n    ../src/a.ts\n", "api:\n  language: typescript\n  entry: '../a.ts\n"):
+            with self.subTest(config=config):
+                self.write("docs/_smalldocs.yml", config)
+                self.assertEqual(self.accepted("src/a.ts"), set())
+
+    def test_a_null_api_key_takes_the_default(self) -> None:
+        self.write("src/a.ts")
+        for config in ("api:\n", "api: ~\n", "api: null\n", "api:\n  language: typescript\n"):
+            with self.subTest(config=config):
+                self.write("docs/_smalldocs.yml", config)
+                self.assertEqual(self.accepted("src/a.ts", "lib/b.ts"), {"src/a.ts"})
+
+    def test_the_generated_list_of_the_parent_counts_as_git_reads_it(self) -> None:
+        self.write("src/index.ts", 'export * from "./lib/a.js";\nexport * from "./generated/b.js";\n'
+                                   'export * from "./x.js";\n')
+        self.write("src/lib/a.ts")
+        self.write("src/generated/b.ts")
+        self.write("src/x.ts")
+        # src/gen* names no folder, and src/**.d is a plain * between two slashes, which names no file here.
+        self.write(".agents/generated.txt", "src/x.ts\nsrc/gen*\nsrc/**.d\n")
+        self.commit()
+        self.assertEqual(self.accepted("src/index.ts", "src/lib/a.ts", "src/generated/b.ts", "src/x.ts"),
+                         {"src/index.ts", "src/lib/a.ts", "src/generated/b.ts"})
+        # A change of the list in the commit itself does not count: the gate reads the list of the parent.
+        self.write(".agents/generated.txt", "src\n")
+        self.assertEqual(self.accepted("src/lib/a.ts", "src/x.ts"), {"src/lib/a.ts"})
+
+    def test_a_generated_index_is_no_entry(self) -> None:
+        self.write("src/index.ts")
+        self.write("src/b.ts")
+        self.write(".agents/generated.txt", "src/index.ts\n")
+        self.commit()
+        self.assertEqual(self.accepted("src/index.ts", "src/b.ts"), {"src/b.ts"})
+
+    def test_require_and_odd_paths(self) -> None:
+        self.write("src/index.ts", 'import y = require("./y");\nexport import z = require("./z.js");\n'
+                                   'export {\n  a,\n} from "./a.js";\n')
+        self.write("src/y.ts")
+        self.write("src/z.ts")
+        self.write("src/a.ts")
+        self.assertEqual(self.accepted("src/y.ts", "src/z.ts", "src/a.ts", "src//a.ts", "src/./y.ts", "src\\z.ts",
+                                       "../app/src/a.ts"),
+                         {"src/y.ts", "src/z.ts", "src/a.ts", "src//a.ts", "src/./y.ts", "src\\z.ts"})
+
+    def test_the_rule_is_python_3_9(self) -> None:
+        ast.parse(RULE.read_text(), feature_version=(3, 9))
+        python = ["uv", "run", "--no-project", "--quiet", "--python", "3.9", "python"]
+        if not (shutil.which("uv") and subprocess.run([*python, "-c", "pass"], capture_output=True).returncode == 0):
+            if not shutil.which("python3.9"):
+                self.skipTest("no Python 3.9: uv cannot fetch it and python3.9 is not on the PATH")
+            python = [shutil.which("python3.9")]
+        self.write("src/a.ts")
+        self.write("docs/_smalldocs.yml", "api:  # the API\n  - {language: typescript, entry: [\n      ../src/a.ts,\n"
+                                          "    ]}\n")
+        self.assertEqual(self.accepted("src/a.ts", "lib/b.ts", python=python), {"src/a.ts"})
+
+    def test_the_package_installs_the_rule_with_the_recipes(self) -> None:
+        # The installer keeps .agents/just/ for itself, so a tool of profile.json cannot own a file there. The rule
+        # comes with the folder of the recipes, which skill-package.json installs.
+        package = json.loads((REPO / "skill-package.json").read_text())
+        self.assertIn(".agents/just/typescript", package["install_extras"]["files"])
+        self.assertTrue(RULE.is_file())
 
 
 if __name__ == "__main__":
