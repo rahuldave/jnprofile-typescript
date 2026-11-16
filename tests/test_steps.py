@@ -843,7 +843,7 @@ class ApiTests(Project):
                                           "  tsconfig: ../tsconfig.json\n  out: api\n")
         code, out = self.just("typescript::api-check")
         self.assertEqual(code, 0, out)
-        self.assertIn("with the api settings of docs/_smalldocs.yml", out)
+        self.assertIn("with the TypeScript sections of the api settings of docs/_smalldocs.yml", out)
         self.assertEqual(sorted(path.name for path in (self.root / "docs").iterdir()), ["_smalldocs.yml"])
         (self.root / "docs/_smalldocs.yml").unlink()
         code, out = self.just("typescript::api-check")
@@ -853,7 +853,7 @@ class ApiTests(Project):
 
     def checked(self, out: str) -> list:
         """The pages that the checker of the tests got, as their paths, from the output OUT."""
-        return [line.split(" ", 1)[1] for line in out.splitlines() if line.startswith("PAGE ")]
+        return [line.split(" ", 1)[1] for line in out.splitlines() if line.startswith("PAGE ") and "/modules/" not in line]
 
     def test_a_changed_file_with_a_space_or_a_letter_outside_ascii_in_its_name_is_checked(self) -> None:
         self.prose_role()
@@ -910,6 +910,78 @@ class ApiTests(Project):
         self.assertEqual(code, 0, out)
         self.assertEqual(len(self.checked(out)), 2, out)
 
+    def test_the_module_comment_of_a_changed_file_with_items_is_checked(self) -> None:
+        self.prose_role()
+        self.commit()
+        self.write("src/other.ts", DOCUMENTED.replace("The arithmetic of the app.", "Other helpers that WRONGWORD add.")
+                   .replace("add", "plus"))
+        code, out = self.just("typescript::api-prose-check")
+        self.assertEqual(code, 1, out)
+        self.assertIn("the module comment of src/other", out)
+
+    def test_the_module_comment_of_a_changed_file_outside_the_api_is_not_checked(self) -> None:
+        self.prose_role()
+        self.write("src/app.ts", DOCUMENTED)
+        self.write("src/index.ts", '/**\n * The package.\n * @module\n */\nexport * from "./app.js";\n')
+        self.commit()
+        self.write("src/internal.ts", "/**\n * The WRONGWORD inside.\n * @module\n */\n\n/** One. */\n"
+                                      "export const one = 1;\n")
+        self.write("src/index.ts", '/**\n * The whole package.\n * @module\n */\nexport * from "./app.js";\n')
+        code, out = self.just("typescript::api-prose-check")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("WRONGWORD", out)
+        # The comment of the index is checked once.
+        self.assertEqual(out.count("The whole package."), 1, out)
+
+    def test_a_plain_opening_comment_before_an_import_is_the_module_comment(self) -> None:
+        self.prose_role()
+        self.commit()
+        text = ('/** The arithmetic of the WRONGWORD app. */\nimport { strict } from "node:assert";\n\n'
+                + DOCUMENTED.split(" */\n\n", 1)[1].replace("return a + b;", "strict.ok(true);\n  return a + b;"))
+        self.write("src/app.ts", text)
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 1, out)
+        self.assertNotIn("no module comment", out)
+        self.assertIn("The arithmetic of the WRONGWORD app.", out)
+        self.assertIn("the module comment of src/app.ts", out)
+
+    def test_an_index_tsx_is_the_entry_too(self) -> None:
+        self.write("src/app.ts", DOCUMENTED)
+        self.write("src/hidden.ts", "export function hidden(a: number): number {\n  return a;\n}\n")
+        self.write("src/index.tsx", '/**\n * The package.\n * @module\n */\nexport * from "./app.js";\n')
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 0, out)
+        self.assertIn("with the entry src/index.tsx", out)
+
+    def test_only_the_typescript_sections_of_the_docs_config_count(self) -> None:
+        self.write("src/app.ts", DOCUMENTED)
+        self.write("src/other.ts", "export function other(a: number): number {\n  return a;\n}\n")
+        python = "  - packages: [mypkg]\n    out: py\n"
+        self.write("docs/_smalldocs.yml", "api:\n" + python + "  - language: typescript\n    entry: ../src/app.ts\n"
+                                          "    tsconfig: ../tsconfig.json\n    out: ts\n")
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 0, out)
+        self.assertIn("with the TypeScript sections of the api settings of docs/_smalldocs.yml", out)
+        # A config with only a Python section is no config of the TypeScript API, so the default entry counts.
+        self.write("docs/_smalldocs.yml", "api:\n" + python)
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 1, out)
+        self.assertIn("with the entry the 2 code files in src/", out)
+        self.assertIn("other", out)
+
+    def test_a_flow_map_of_typescript_settings_counts_and_broken_yaml_fails_with_a_message(self) -> None:
+        self.write("src/app.ts", DOCUMENTED)
+        self.write("src/other.ts", "export function other(a: number): number {\n  return a;\n}\n")
+        self.write("docs/_smalldocs.yml", "api: {language: typescript, entry: ../src/app.ts, "
+                                          "tsconfig: ../tsconfig.json, out: api}\n")
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 0, out)
+        self.assertIn("with the TypeScript sections of the api settings of docs/_smalldocs.yml", out)
+        self.write("docs/_smalldocs.yml", "api: [unclosed\n")
+        code, out = self.just("typescript::api-check")
+        self.assertEqual(code, 2, out)
+        self.assertIn("docs/_smalldocs.yml cannot be read", out)
+
     def test_a_failure_of_smalldocs_or_uv_names_its_exit_code(self) -> None:
         steps = load_steps()
         os.chdir(self.root)
@@ -940,12 +1012,14 @@ class ApiTests(Project):
         self.write("src/app.ts", DOCUMENTED.replace("the first number", "the WRONGWORD number"))
         code, out = self.just("typescript::api-prose-check")
         self.assertEqual(code, 1, out)
-        self.assertIn("api-prose-check: the API pages app, of the files changed since HEAD", out)
+        self.assertIn("api-prose-check: the API pages app, the module comment of src/app.ts, of the files changed since HEAD", out)
         self.assertIn("the WRONGWORD number", out)
         self.assertNotIn("function other", out)
-        pages = [line.split()[1] for line in out.splitlines() if line.startswith("PAGE ")]
-        self.assertEqual(len(pages), 1, out)
-        self.assertFalse(Path(pages[0]).resolve().is_relative_to(self.root), pages)
+        pages = [line.split(" ", 1)[1] for line in out.splitlines() if line.startswith("PAGE ")]
+        # The page of app.ts and its module comment.
+        self.assertEqual(len(pages), 2, out)
+        for page in pages:
+            self.assertFalse(Path(page).resolve().is_relative_to(self.root), pages)
         self.assertIn("fix each hard problem in the JSDoc comment", out)
         self.assertEqual(self.git("status", "--porcelain", "--untracked-files=all"), " M src/app.ts\n")
 
@@ -958,7 +1032,7 @@ class ApiTests(Project):
         self.write("src/app.ts", DOCUMENTED)
         code, out = self.just("typescript::api-prose-check")
         self.assertEqual(code, 0, out)
-        self.assertIn("the API pages app, of the files changed since HEAD", out)
+        self.assertIn("the API pages app, the module comment of src/app.ts, of the files changed since HEAD", out)
         self.assertEqual(sorted(path.name for path in (self.root / "docs").iterdir()), ["_smalldocs.yml"])
 
     def test_api_prose_check_with_no_changed_code_passes(self) -> None:
@@ -996,7 +1070,7 @@ class ApiTests(Project):
         self.assertIn("no code changed since HEAD", out)
         code, out = self.just("typescript::api-prose-check", "--base", "HEAD~1")
         self.assertEqual(code, 0, out)
-        self.assertIn("the API pages app, of the files changed since HEAD~1", out)
+        self.assertIn("the API pages app, the module comment of src/app.ts, of the files changed since HEAD~1", out)
         code, out = self.just("typescript::api-prose-check", "--base", "nothing")
         self.assertEqual(code, 2, out)
         self.assertIn("no commit nothing", out)
@@ -1009,11 +1083,40 @@ class ApiTests(Project):
         self.assertIn("needs base_commit", out)
 
 
+class ModuleCommentTests(unittest.TestCase):
+    def test_the_module_comment_follows_the_rule_of_smalldocs(self) -> None:
+        steps = load_steps()
+        cases = {
+            '/** M. */\nimport x from "y";\n': "M.",
+            "/** D. */\nexport function f() {}\n": None,
+            '/** The mod. */\nexport * as ns from "./a.js";\n': "The mod.",
+            '/** The mod. */\nexport type * from "./a.js";\n': "The mod.",
+            '/**/\n/** The mod. */\nimport x from "y";\n': "The mod.",
+            "/** The mod. */\nexport type { A };\n": None,
+            "/**\n * T.\n * @module\n */\nexport const a = 1;\n": "T.",
+            "/** A. */\n/** B. */\nexport const b = 1;\n": "A.",
+            '#!/usr/bin/env node\n/* MIT */\n// x\n/** L. */\n"use client";\n': "L.",
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            for text, want in cases.items():
+                with self.subTest(text=text):
+                    path = Path(folder) / "f.ts"
+                    path.write_text(text)
+                    self.assertEqual(steps.module_comment(path), want)
+
+
 class ProfileTests(unittest.TestCase):
     def test_the_code_and_test_globs_of_the_steps_are_those_of_the_profile(self) -> None:
         steps = load_steps()
         self.assertEqual(list(steps.CODE), PROFILE["code"])
         self.assertEqual(list(steps.TESTS), PROFILE["tests"])
+
+    def test_each_package_of_docstring_check_that_typescript_eslint_releases_is_pinned(self) -> None:
+        # eslint-plugin-jsdoc takes the utils of typescript-eslint as ^8.72.0. A release whose own packages npm cannot
+        # find yet stopped the step, so the utils are pinned to the version of the parser.
+        steps = load_steps()
+        pins = dict(package.rsplit("@", 1) for package in steps.ESLINT)
+        self.assertEqual(pins["@typescript-eslint/utils"], pins["@typescript-eslint/parser"])
 
     def test_each_step_is_in_the_verify_of_its_tool(self) -> None:
         tools = PROFILE["tools"]

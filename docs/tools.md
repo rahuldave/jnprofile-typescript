@@ -139,7 +139,7 @@ The profile names its files for the commit gates. The code is `**/*.ts`, `**/*.t
 
 ## api
 
-The tool has no package in `package.json`. uv runs smalldocs 0.5.11 with node from the `nodejs-wheel` package. smalldocs reads the API with TypeDoc. When the project has no TypeDoc, npx fetches TypeDoc 0.28 into `.local/npm-cache`. The tool is a default tool, and its check runs in a project with the docs role of jnterfaces.
+The tool has no package in `package.json`. uv runs smalldocs 0.5.12 with node from the `nodejs-wheel` package. smalldocs reads the API with TypeDoc. When the project has no TypeDoc, npx fetches TypeDoc 0.28 into `.local/npm-cache`. The tool is a default tool, and its check runs in a project with the docs role of jnterfaces.
 
 | Recipe | What it does |
 |---|---|
@@ -148,16 +148,14 @@ The tool has no package in `package.json`. uv runs smalldocs 0.5.11 with node fr
 
 What `api-check` needs:
 
-- **A module comment** for each file. Put a JSDoc comment with the tag `@module` at the top of the file.
+- **A module comment** for each file. Put a JSDoc comment at the top of the file, before its imports. A JSDoc comment right before a declaration is the comment of that declaration. So in a file with no imports, give the first declaration a JSDoc comment of its own, after the module comment.
 - **A JSDoc comment** for each exported item.
 - **A comment for each parameter.** Put a `//` comment after the parameter, on its line, or a `@param` line in the JSDoc comment.
 - **A comment for the return.** Put a `@returns` line in the JSDoc comment. smalldocs also reads a `//` comment after the `{` of the body, but biome moves that comment into the body, so `fmt-check` fails on it. A function that returns `void` needs no comment on its return.
 
 ```ts
-/**
- * The arithmetic of the app.
- * @module
- */
+/** The arithmetic of the app. */
+import { round } from "./round.js";
 
 /**
  * Add two numbers.
@@ -167,15 +165,15 @@ export function add(
   a: number, // the first number
   b: number, // the second number
 ): number {
-  return a + b;
+  return round(a + b);
 }
 ```
 
 The settings of `api-check`:
 
-- **With a key `api` in `docs/_smalldocs.yml`**, smalldocs reads its settings there. The key `entry` names the entry points, and `language` is `typescript`.
-- **Otherwise**, the step writes a temporary config, with `language: typescript`. Its entry is `src/index.ts` when that file exists. Then the API is what the index exports. Without `src/index.ts`, the entry is each code file in `src/`, and each file gets its own page. The test files, the declaration files and the files that `.agents/generated.txt` of the parent commit names do not count.
-- **With no `src/index.ts` and no code file in `src/`**, the step passes and says that there is no API to check.
+- **With a TypeScript section in the key `api` of `docs/_smalldocs.yml`**, smalldocs reads its settings there. A TypeScript section has `language: typescript`, and its key `entry` names the entry points. The step takes only the TypeScript sections, so a Python section of the same file does not count. A key `api` with no TypeScript section does not count either. When PyYAML cannot read the file, the step fails with exit 2.
+- **Otherwise**, the step writes a temporary config, with `language: typescript`. Its entry is the index of `src`, which is `src/index.ts`, `src/index.tsx`, `src/index.mts` or `src/index.cts`, when one exists. Then the API is what the index exports. Without an index, the entry is each code file in `src/`, and each file gets its own page. The test files, the declaration files and the files that `.agents/generated.txt` of the parent commit names do not count.
+- **With no index and no code file in `src/`**, the step passes and says that there is no API to check.
 - **When TypeDoc fails**, smalldocs exits with 2, and the step says so. An example is an entry that `tsconfig.json` does not find.
 
 The files of the API are the code files in `src/` with the default settings, because the entry and the files that it exports are there. With a key `api`, they are the entry files and the code files in their folders. The alias `@api` of the commit gates is to name these files. The gate does not fill `@api` yet, so no target needs them now.
@@ -193,7 +191,7 @@ The changed files of `api-prose-check`:
 - **The rule of the base** is not in this profile. The step loads `.agents/skills/nossaifd/scripts/prose_gate.py`, which the prose role installs, and calls its `base_commit`. So in CI, both steps compare with the same commit. The load writes no bytecode into the skill.
 - **An error of the base**, as a shallow clone or a base that is not a commit, fails the step with exit 2 and the message of nossaifd. An install of nossaifd with no `base_commit` fails the step with exit 2 in CI or with `--base`, and asks you to run `just install`.
 
-`api-prose-check` builds the API pages in a temporary folder outside the project, with the TypeScript sections of the settings. The page of a changed file is each page with an item from that file. A changed file with no item of its own, such as an index that only exports again, has no such page, so the step checks its module comment.
+`api-prose-check` builds the API pages in a temporary folder outside the project, with the TypeScript sections of the settings. The page of a changed file is each page with an item from that file. A page holds the first paragraph of the module comment in its front matter, where the checker does not read it. So the step also checks the module comment of each changed file with a page, and of each changed entry file, such as an index that only exports again. A changed file that is no entry and has no item on a page is not in the API, so the step does not check it.
 
 Then the step runs `.agents/skills/nossaifd/scripts/check.py` on those pages. A hard problem fails the step. Fix it in the JSDoc comment or the comment that it comes from. Without the prose role, which installs the checker, the step passes and says so.
 

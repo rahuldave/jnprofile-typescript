@@ -3,7 +3,7 @@ api-check, api-prose-check and test-paths.
 
 The recipes in this folder run it with uv and Python 3.11 or later. Its commands are coverage [MODULE], docs,
 fresh NAME MODULE, ran NAME [ARG...], begin NAME [ARG...], stamp NAME, build NAME MODULE COUNT,
-test-paths FILE..., api check, api prose [--base REF] and pages DOCS OUT FILE.... NAME is test, integration or
+test-paths FILE..., api check, api prose [--base REF], pages DOCS OUT FILE... and config DOCS OUT. NAME is test, integration or
 prose, and for build test, cov or integration. MODULE is the module file of the recipes. begin, stamp, fresh and ran
 tie each coverage report, or the pass of api-prose-check, to the run ID JLOG_RUN of the root Justfile and to the
 worktree tree, so that coverage-check reads the reports of test and integration only from the same run, and a check
@@ -31,8 +31,11 @@ import xml.etree.ElementTree as ElementTree
 DIFF_COVER = 'diff-cover==11.0.1'
 NODE = ['uvx', '--quiet', '--from', 'nodejs-wheel==24.*']
 # The packages of docstring-check. npm exec installs them into its cache, not into the project, because the parser
-# of typescript-eslint needs a typescript older than 6.1, and the project has typescript 7.
-ESLINT = ('eslint@10.14.0', 'eslint-plugin-jsdoc@65.4.0', '@typescript-eslint/parser@8.72.1', 'typescript@6.0.3')
+# of typescript-eslint needs a typescript older than 6.1, and the project has typescript 7. The utils of
+# typescript-eslint, which eslint-plugin-jsdoc takes as ^8.72.0, are pinned too, so that a new release of them, whose
+# own packages npm cannot find yet, does not stop the step.
+ESLINT = ('eslint@10.14.0', 'eslint-plugin-jsdoc@65.4.0', '@typescript-eslint/parser@8.72.1',
+          '@typescript-eslint/utils@8.72.1', 'typescript@6.0.3')
 ESLINT_CONFIG = Path(__file__).resolve().parent / 'docstring.eslint.mjs'
 GENERATED = '.agents/generated.txt'
 COVERAGE_EXCLUDE = '.agents/coverage-exclude.txt'
@@ -58,10 +61,10 @@ RAW = {'test': WORK / 'c8', 'integration': WORK / 'c8-integration', 'prose': Non
 # The record of the installer. Its key steps names the steps of just check.
 RECORD = Path('.agents/stack.json')
 # smalldocs reads the API with TypeDoc, and node comes from the nodejs-wheel package, as in the recipes.
-SMALLDOCS = 'smalldocs==0.5.11'
+SMALLDOCS = 'smalldocs==0.5.12'
 DOCS_CONFIG = Path('docs/_smalldocs.yml')
-# The default entry of the API: src/index.ts when it exists, otherwise each code file in src.
-ENTRY = Path('src/index.ts')
+# The default entry of the API: the index of src when it exists, otherwise each code file in src.
+ENTRIES = ('src/index.ts', 'src/index.tsx', 'src/index.mts', 'src/index.cts')
 SOURCE = 'src'
 # The checker of nossaifd, which the prose role installs. api prose checks the API pages with it.
 PROSE_CHECKER = Path('.agents/skills/nossaifd/scripts/check.py')
@@ -738,32 +741,46 @@ def test_paths(files):
 
 
 def api_entry(excluded):
-    """The default entry of the API, as a list of paths relative to the top: src/index.ts when it is a code file,
-    otherwise each code file in src. EXCLUDED holds the files of generated.txt. An empty list means no API."""
+    """The default entry of the API, as a list of paths relative to the top: the first of src/index.ts,
+    src/index.tsx, src/index.mts and src/index.cts that is a code file, otherwise each code file in src. EXCLUDED
+    holds the files of generated.txt. An empty list means no API."""
     files = code_files(excluded)
-    if ENTRY.as_posix() in files:
-        return [ENTRY.as_posix()]
+    for index in ENTRIES:
+        if index in files:
+            return [index]
     return [path for path in files if path.startswith(SOURCE + '/')]
 
 
 def api_settings(folder):
-    """The folder of the smalldocs config that api-check uses, and a note. It is docs/ when docs/_smalldocs.yml has
-    the key api. Otherwise it is FOLDER, with a config of the default entry of api_entry. With no entry, it is None."""
+    """The folder of the smalldocs config that api-check uses, and a note, or None and a note, or None and an exit
+    code on an error.
+
+    When docs/_smalldocs.yml has the key api with a TypeScript section, a section with language: typescript, the
+    folder is FOLDER/typescript, with a config of only those sections, which typescript_config writes. Otherwise it is
+    FOLDER, with a config of the default entry of api_entry. With no entry, it is None.
+    """
     try:
         text = DOCS_CONFIG.read_text()
     except (OSError, UnicodeDecodeError):
         text = ''
     if re.search(r'^api\s*:', text, re.MULTILINE):
-        return DOCS_CONFIG.parent, f'the api settings of {DOCS_CONFIG}'
+        own = folder / 'typescript'
+        code = subprocess.run(smalldocs('python', str(Path(__file__).resolve()), 'config', str(DOCS_CONFIG.parent),
+                                        str(own)), env=smalldocs_env()).returncode
+        if code == 0:
+            return own, f'the TypeScript sections of the api settings of {DOCS_CONFIG}'
+        if code != 3:
+            return None, code
     entry = api_entry(listed(parent_list(GENERATED)))
     if not entry:
-        return None, (f'no {ENTRY} and no code file in {SOURCE}/. The key api of {DOCS_CONFIG} can name the entry')
+        return None, (f'no {ENTRIES[0]} and no code file in {SOURCE}/. The key api of {DOCS_CONFIG} can name the '
+                      'entry')
     root = top()
     lines = ['api:', '  language: typescript', '  entry: ' + json.dumps([str(root / path) for path in entry])]
     if Path('tsconfig.json').is_file():
         lines.append('  tsconfig: ' + json.dumps(str(root / 'tsconfig.json')))
     (folder / '_smalldocs.yml').write_text('\n'.join(lines + ['  out: api']) + '\n')
-    about = ENTRY.as_posix() if entry == [ENTRY.as_posix()] else f'the {len(entry)} code files in {SOURCE}/'
+    about = entry[0] if entry[0] in ENTRIES else f'the {len(entry)} code files in {SOURCE}/'
     return folder, f'the entry {about}'
 
 
@@ -862,6 +879,8 @@ def api(action, option=None):
             return about_base
     with tempfile.TemporaryDirectory() as temp:
         folder, about = api_settings(Path(temp))
+        if folder is None and isinstance(about, int):
+            return about
         if folder is None:
             print(f'{"api-check" if action == "check" else "api-prose-check"}: {about}, so there is no API to check')
             return 0
@@ -871,8 +890,8 @@ def api(action, option=None):
                                   env=smalldocs_env()).returncode
             if code == 1:
                 print('api-check: give each exported function, class, interface, type and constant a JSDoc comment, '
-                      'and each file a module comment with the tag @module. Give each parameter a comment after it on '
-                      'its line, or a @param line, and the return a @returns line', file=sys.stderr)
+                      'and each file a module comment: a JSDoc comment at its top, before its imports. Give each parameter '
+                      'a comment after it on its line, or a @param line, and the return a @returns line', file=sys.stderr)
             elif code:
                 print(f'api-check: smalldocs or uv failed with the exit code {code}. When smalldocs cannot read the '
                       f'API, the key api of {DOCS_CONFIG} can name the entry', file=sys.stderr)
@@ -899,7 +918,8 @@ def api(action, option=None):
                                         *changed), env=smalldocs_env()).returncode
         if code:
             return code
-        pages = sorted(out.rglob('*.md'))
+        # The API pages first, then the module comments.
+        pages = sorted(out.rglob('*.md'), key=lambda page: (not page.is_relative_to(out / 'pages'), page))
         if not pages:
             print('api-prose-check: no changed file has an API page or a module comment')
             return 0
@@ -933,50 +953,109 @@ def linked_files(text):
     return found
 
 
+# The rule of smalldocs 0.5.12 for the opening comment of a file, as header_comment of smalldocs.api_ts has it. A
+# comment that is no JSDoc comment, such as a licence or /**/, may come before it and after it. An import, a re-export,
+# a directive, another JSDoc comment or the end of the file must follow it.
+OTHER_COMMENT = r'(?>//[^\n]*|/\*(?!\*[^/])(?:(?!\*/).)*\*/)\s*'
+HEADER = re.compile(rf'\ufeff?(?:#![^\n]*\n)?\s*(?:{OTHER_COMMENT})*+/\*\*(?!/)((?:(?!\*/).)*)\*/\s*(?:{OTHER_COMMENT})*+'
+                    r'(?=import\b|export\s+(?:type\s+)?(?:\*|\{[^}]*\}\s*from)|["\']use \w+["\']|/\*\*|$)', re.S)
+
+
 def module_comment(path):
-    """The text of the module comment of the file PATH, a JSDoc comment with the tag @module or @packageDocumentation,
-    with no * at the start of its lines and no tags. None when the file has none."""
+    """The text of the module comment of the file PATH, with no * at the start of its lines and no tags, or None when
+    the file has none.
+
+    A JSDoc comment with the tag @module or @packageDocumentation is the module comment, as for TypeDoc. Otherwise
+    the opening comment is, by the rule of smalldocs in HEADER. Before a declaration, the opening comment is the
+    comment of that declaration.
+    """
     try:
         source = Path(path).read_text(errors='replace')
     except OSError:
         return None
-    for match in re.finditer(r'/\*\*(.*?)\*/', source, re.S):
-        body = match.group(1)
-        if re.search(r'@(module|packageDocumentation)\b', body):
-            lines = [re.sub(r'^\s*\* ?', '', line) for line in body.splitlines()]
-            return '\n'.join(line for line in lines if not line.lstrip().startswith('@')).strip() or None
-    return None
+    marked = [match.group(1) for match in re.finditer(r'/\*\*(?!/)((?:(?!\*/).)*)\*/', source, re.S)
+              if re.search(r'@(module|packageDocumentation)\b', match.group(1))]
+    header = HEADER.match(source)
+    body = marked[0] if marked else header.group(1) if header else None
+    if body is None:
+        return None
+    lines = [re.sub(r'^\s*\* ?', '', line) for line in body.splitlines()]
+    return '\n'.join(line for line in lines if not line.lstrip().startswith('@')).strip() or None
+
+
+def typescript_config(folder, target, links):
+    """Write a smalldocs config into the folder TARGET with only the TypeScript sections of the key api of the config
+    in FOLDER, and return those sections. It returns 3 when there is none, and 2 when PyYAML cannot read the config.
+
+    The entry, the tsconfig and the root become absolute paths. With LINKS, each section gets its own out, the top of
+    the project as its root and the source link MARK, for pages(). It runs with smalldocs, whose PyYAML reads the
+    config.
+    """
+    import yaml
+
+    folder, target = Path(folder).resolve(), Path(target)
+    try:
+        data = yaml.safe_load((folder / '_smalldocs.yml').read_text())
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        print(f'api-check: {folder / "_smalldocs.yml"} cannot be read: {exc}', file=sys.stderr)
+        return 2
+    if data is not None and not isinstance(data, dict):
+        print(f'api-check: {folder / "_smalldocs.yml"} is no map of settings', file=sys.stderr)
+        return 2
+    settings = (data or {}).get('api') or {}
+    sections = [section for section in (settings if isinstance(settings, list) else [settings])
+                if isinstance(section, dict) and section.get('language') == 'typescript']
+    own = []
+    for number, section in enumerate(sections):
+        section = dict(section)
+        for key in ('entry', 'tsconfig', 'root'):
+            if key in section:
+                section[key] = absolute(section[key], folder)
+        if links:
+            section.update(out=f'api{number}', source=MARK.rstrip('/'), root=str(top()))
+        own.append(section)
+    if not own:
+        return 3
+    target.mkdir(parents=True, exist_ok=True)
+    (target / '_smalldocs.yml').write_text(yaml.safe_dump({'api': own if len(own) > 1 else own[0]}))
+    return own
+
+
+def entry_files(sections, files):
+    """The files of FILES, paths relative to the top, that an entry of SECTIONS names, or that are in a folder that an
+    entry names."""
+    entries = []
+    for section in sections:
+        entry = section.get('entry', [])
+        entries += [Path(path) for path in (entry if isinstance(entry, list) else [entry]) if isinstance(path, str)]
+    root = top()
+    found = set()
+    for name in files:
+        full = root / name
+        if any(full == entry or entry in full.parents for entry in entries):
+            found.add(name)
+    return found
 
 
 def pages(folder, out, files):
     """Write the API page of each changed file of FILES under OUT, as a Markdown file, from the TypeScript sections of
-    the key api of the smalldocs config in FOLDER.
+    the key api of the smalldocs config in FOLDER, and its module comment as a page of its own.
 
-    It runs with smalldocs, whose PyYAML reads the config. It writes a config of its own in OUT, with absolute paths,
-    the top of the project as the root, and a source link MARK, and smalldocs builds the pages there. A page is a
-    page of a changed file when the source link of one of its items names that file. A changed file with no item of
-    its own, such as an index that only exports again, has no such page. Its module comment, which a page shows,
-    then goes into a page of its own. Returns the exit code.
+    It runs with smalldocs. typescript_config writes the config, and smalldocs builds the pages there. A page is a
+    page of a changed file when the source link of one of its items names that file. A page holds the first
+    paragraph of the module comment in its front matter, which the checker of nossaifd does not read as prose. So
+    the module comment of each such file goes into a page of its own. So does the module comment of a changed entry
+    file with no item of its own, such as an index that only exports again. A changed file that is no entry and has
+    no page is not in the API. Returns the exit code.
     """
-    import yaml
-
-    folder, out = Path(folder).resolve(), Path(out)
-    settings = (yaml.safe_load((folder / '_smalldocs.yml').read_text()) or {}).get('api') or {}
-    sections = [section for section in (settings if isinstance(settings, list) else [settings])
-                if isinstance(section, dict) and section.get('language') == 'typescript']
+    out = Path(out)
     config = out / 'config'
-    config.mkdir()
-    own = []
-    for number, section in enumerate(sections):
-        section = dict(section, out=f'api{number}', source=MARK.rstrip('/'), root=str(top()))
-        for key in ('entry', 'tsconfig'):
-            if key in section:
-                section[key] = absolute(section[key], folder)
-        own.append(section)
-    if not own:
+    own = typescript_config(folder, config, True)
+    if own == 3:
         print('api-prose-check: the api settings have no section with language: typescript')
         return 0
-    (config / '_smalldocs.yml').write_text(yaml.safe_dump({'api': own}))
+    if isinstance(own, int):
+        return own
     sys.stdout.flush()
     build = subprocess.run(['smalldocs', 'api', 'build', '--dir', str(config)], capture_output=True, text=True)
     if build.returncode:
@@ -997,7 +1076,7 @@ def pages(folder, out, files):
                 target = target.with_suffix('.md')
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(text)
-    for name in sorted(wanted - shown):
+    for name in sorted(shown | entry_files(own, wanted)):
         comment = module_comment(name)
         if comment:
             target = out / 'modules' / (name + '.md')
@@ -1055,9 +1134,12 @@ def main(argv):
         return option if isinstance(option, int) else api('prose', option or None)
     if argv[:1] == ['pages'] and len(argv) >= 3:
         return pages(argv[1], argv[2], argv[3:])
+    if argv[:1] == ['config'] and len(argv) == 3:
+        own = typescript_config(argv[1], argv[2], False)
+        return own if isinstance(own, int) else 0
     print('usage: steps.py coverage [MODULE] | docs | fresh NAME MODULE | ran NAME [ARG...] | begin NAME [ARG...] | '
           'stamp NAME | build NAME MODULE COUNT | test-paths [FILE...] | api check | api prose [--base REF] | '
-          'pages DOCS OUT [FILE...]', file=sys.stderr)
+          'pages DOCS OUT [FILE...] | config DOCS OUT', file=sys.stderr)
     return 2
 
 
