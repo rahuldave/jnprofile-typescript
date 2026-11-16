@@ -1,7 +1,7 @@
-"""The helper of the steps of the typescript profile: coverage-check, docstring-check and test-paths.
+"""The helper of the steps of the typescript profile: test, coverage-check, docstring-check and test-paths.
 
 The recipes in this folder run it with uv and Python 3.11 or later: python steps.py coverage, docs, fresh,
-begin ARG..., stamp and test-paths FILE.... begin, stamp and fresh tie the coverage report to the run ID JLOG_RUN of
+begin ARG..., stamp, build and test-paths FILE.... begin, stamp and fresh tie the coverage report to the run ID JLOG_RUN of
 the root Justfile and to the worktree tree, so that coverage-check reads the report of test only in the same run.
 coverage-check runs diff-cover with uv. docstring-check runs eslint with npm exec, and node comes from the
 nodejs-wheel package, as in the recipes.
@@ -172,6 +172,9 @@ def type_only_files(root):
     found = set()
     for source_map in BUILD.rglob('*.map'):
         output = source_map.with_suffix('')
+        # The map of a declaration file, from declarationMap, names a source that can hold code too.
+        if output.name.endswith(DECLARATIONS):
+            continue
         try:
             sources = json.loads(source_map.read_text()).get('sources', [])
             text = re.sub(r'/\*.*?\*/', '', output.read_text(), flags=re.S)
@@ -403,12 +406,72 @@ def docs():
     return 0
 
 
-def emitted(path):
-    """The path of the JavaScript file that tsc writes for the TypeScript file PATH into the build of test-paths."""
-    for source, target in (('.mts', '.mjs'), ('.cts', '.cjs'), ('.tsx', '.js'), ('.ts', '.js')):
+def project_options():
+    """The compiler options of the project, as tsc --showConfig resolves them from tsconfig.json and its extends.
+
+    An empty dict when tsc cannot read the config, so that the build itself shows the error.
+    """
+    run = subprocess.run([*NODE, 'npm', 'exec', '--', 'tsc', '--showConfig'], capture_output=True, text=True)
+    try:
+        options = json.loads(run.stdout).get('compilerOptions', {})
+    except (ValueError, AttributeError):
+        return {}
+    return options if isinstance(options, dict) else {}
+
+
+def compile_into(build, options):
+    """Compile the project with tsc into the folder BUILD, removed first, and return the finished process.
+
+    The flags take the place of the settings of the project that would write elsewhere or write no JavaScript:
+    the output, its root, which is the top of the project so that emitted() finds each file, the build info, the
+    declarations, and the source maps that c8 needs. tsc writes the output also when a file has an error, so a file
+    that does not build cannot hide another file.
+    """
+    shutil.rmtree(build, ignore_errors=True)
+    flags = ['--pretty', 'false', '--outDir', str(build), '--rootDir', '.', '--noEmit', 'false',
+             '--emitDeclarationOnly', 'false', '--noEmitOnError', 'false',
+             '--tsBuildInfoFile', str(build / 'tsconfig.tsbuildinfo'), '--sourceMap', 'true',
+             '--inlineSourceMap', 'false']
+    # tsc refuses a declarationDir with no declarations, so the flag goes only to a project that writes them.
+    if options.get('declaration') or options.get('composite'):
+        flags += ['--declarationDir', str(build / 'types')]
+    return subprocess.run([*NODE, 'npm', 'exec', '--', 'tsc', *flags], capture_output=True, text=True)
+
+
+def emitted(path, build, options):
+    """The path of the JavaScript file that tsc writes for the TypeScript file PATH into BUILD.
+
+    With the option jsx set to preserve, a .tsx file becomes a .jsx file.
+    """
+    jsx = '.jsx' if str(options.get('jsx', '')).lower() == 'preserve' else '.js'
+    for source, target in (('.mts', '.mjs'), ('.cts', '.cjs'), ('.tsx', jsx), ('.ts', '.js')):
         if path.endswith(source):
-            return PATHS_BUILD / (path[:-len(source)] + target)
-    return PATHS_BUILD / path
+            return build / (path[:-len(source)] + target)
+    return build / path
+
+
+def build():
+    """Compile the project into the build of test, for test and cov, and return the exit code.
+
+    It fails on each test file of the project that tsc writes no output for, because no test of it would run. Such
+    a file is outside the include of tsconfig.json. It exits with 3 when the include finds no file at all, error
+    TS18003: a project with no code yet.
+    """
+    options = project_options()
+    run = compile_into(BUILD, options)
+    out = run.stdout + run.stderr
+    tests = sorted(path for path in listed(TESTS) if not path.startswith(TOOL_FOLDERS)
+                   and 'node_modules' not in path.split('/')[:-1] and Path(path).is_file())
+    if run.returncode and 'error TS18003' in out and not tests:
+        return 3
+    if run.returncode and 'error TS18003' not in out:
+        print(out, end='')
+        return run.returncode
+    absent = [path for path in tests if not emitted(path, BUILD, options).is_file()]
+    for path in absent:
+        print(f'{path}: tsc writes no output for this test file, so its tests never run. Name it in the include of '
+              'tsconfig.json', flush=True)
+    return 1 if absent else 0
 
 
 def ran_tests(report, outputs):
@@ -448,18 +511,14 @@ def test_paths(files):
             print(run.stdout + run.stderr, end='')
             print('just test-paths: npm cannot install the dependencies of the project')
             return 2
-    shutil.rmtree(PATHS_BUILD, ignore_errors=True)
-    # The build has the folders of the project, so that a file maps to its output. tsc writes the output also
-    # when a file has an error, so a file that does not build cannot hide another file.
-    run = subprocess.run([*NODE, 'npm', 'exec', '--', 'tsc', '--pretty', 'false', '--outDir', str(PATHS_BUILD),
-                          '--rootDir', '.', '--noEmit', 'false', '--noEmitOnError', 'false',
-                          '--tsBuildInfoFile', str(PATHS_BUILD / 'tsconfig.tsbuildinfo')], capture_output=True, text=True)
+    options = project_options()
+    run = compile_into(PATHS_BUILD, options)
     print(run.stdout + run.stderr, end='')
     named = [Path(path).as_posix().removeprefix('./') for path in files]
     if run.returncode and any(line.startswith(f'{path}(') for line in run.stdout.splitlines() for path in named):
         print('just test-paths: a test file does not build')
         return 1
-    outputs = [emitted(path) for path in named]
+    outputs = [emitted(path, PATHS_BUILD, options) for path in named]
     absent = [path for path, output in zip(named, outputs) if not output.is_file()]
     if absent:
         print(f'just test-paths: tsc wrote no output for {", ".join(absent)}: the include of tsconfig.json does not '
@@ -496,7 +555,10 @@ def main(argv):
         return stamp()
     if argv[:1] == ['test-paths']:
         return test_paths(argv[1:])
-    print('usage: steps.py coverage | docs | fresh | begin [ARG...] | stamp | test-paths [FILE...]', file=sys.stderr)
+    if argv == ['build']:
+        return build()
+    print('usage: steps.py coverage | docs | fresh | begin [ARG...] | stamp | build | test-paths [FILE...]',
+          file=sys.stderr)
     return 2
 
 

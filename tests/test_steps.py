@@ -235,6 +235,56 @@ class StepTests(Project):
             self.assertEqual(code, 0, out)
             self.assertIn("✔ add", out)
 
+    def options(self, **options) -> None:
+        """Write tsconfig.json with the settings of the profile and OPTIONS."""
+        self.write("tsconfig.json", json.dumps({**TSCONFIG, "compilerOptions": {**TSCONFIG["compilerOptions"],
+                                                                               **options}}))
+
+    def test_a_test_file_that_tsc_does_not_compile_fails_test(self) -> None:
+        self.write("tests/outside.test.ts", 'import { test } from "node:test";\n\ntest("outside", () => {});\n')
+        code, out = self.just("typescript::test")
+        self.assertEqual(code, 1, out)
+        self.assertIn("tests/outside.test.ts: tsc writes no output for this test file", out)
+
+    def test_a_test_file_outside_an_include_that_finds_no_code_fails_test(self) -> None:
+        shutil.rmtree(self.root / "src")
+        self.write("tests/outside.test.ts", 'import { test } from "node:test";\n\ntest("outside", () => {});\n')
+        code, out = self.just("typescript::test")
+        self.assertEqual(code, 1, out)
+        self.assertIn("tests/outside.test.ts: tsc writes no output", out)
+
+    def test_no_emit_and_emit_declaration_only_still_run_the_tests(self) -> None:
+        for options in ({"noEmit": True}, {"declaration": True, "emitDeclarationOnly": True}):
+            with self.subTest(options=options):
+                self.options(**options)
+                code, out = self.just("typescript::test")
+                self.assertEqual(code, 0, out)
+                self.assertIn("✔ add", out)
+
+    def test_a_tsx_test_with_jsx_preserve_is_not_left_out(self) -> None:
+        # node cannot run the .jsx output, so the test fails, where a glob of .js only would skip it and pass.
+        self.options(jsx="preserve")
+        self.write("src/view.test.tsx", 'import { test } from "node:test";\n\ntest("view", () => {});\n')
+        code, out = self.just("typescript::test")
+        self.assertEqual(code, 1, out)
+        self.assertIn("✖ .jnprofile-typescript/build/src/view.test.jsx", out)
+
+    def test_declarations_go_into_the_build_and_the_tree_stays_clean(self) -> None:
+        self.options(composite=True, declarationDir="types")
+        self.commit()
+        code, out = self.just("typescript::test")
+        self.assertEqual(code, 0, out)
+        self.assertFalse((self.root / "types").exists(), out)
+        self.assertEqual(self.git("status", "--porcelain", "--untracked-files=all"), "")
+
+    def test_a_file_with_no_exports_is_no_file_of_types_with_declaration_maps(self) -> None:
+        self.options(composite=True, declarationDir="types", declarationMap=True)
+        self.commit()
+        self.write("src/main.ts", 'import { add } from "./app.js";\n\nconsole.log(add(1, 2));\n')
+        code, out = self.just("typescript::coverage-check")
+        self.assertEqual(code, 1, out)
+        self.assertIn("src/main.ts: a changed file that is not in the coverage report", out)
+
     def test_an_untested_one_line_arrow_function_fails_and_c8_ignore_next_makes_it_pass(self) -> None:
         self.commit()
         arrow = "\n/** Multiply A and B. */\nexport const mul = (a: number, b: number): number => a * b;\n"
@@ -485,6 +535,17 @@ class TestPathsTests(Project):
         self.write("src/bad.ts", '/** Bad. */\nexport const bad: number = "x";\n')
         code, out = self.paths("src/pass.test.ts")
         self.assertEqual(code, 0, out)
+
+    def test_declarations_of_test_paths_go_into_its_build(self) -> None:
+        for name in TEST_FILES:
+            if name != "src/pass.test.ts":
+                (self.root / name).unlink()
+        self.write("tsconfig.json", json.dumps({**TSCONFIG, "compilerOptions": {
+            **TSCONFIG["compilerOptions"], "composite": True, "declarationDir": "types"}}))
+        self.commit()
+        code, out = self.paths("src/pass.test.ts")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.git("status", "--porcelain", "--untracked-files=all"), "")
 
     def test_an_incremental_project_builds_again_on_each_run(self) -> None:
         self.write("tsconfig.json", json.dumps({**TSCONFIG, "compilerOptions": {

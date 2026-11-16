@@ -54,7 +54,21 @@ The packages are `typescript@7`, `@types/node@24` and `c8@12`. c8 records which 
 
 Put the code and the tests in `src/`. Name each test file `NAME.test.ts`, for example `src/app.test.ts`.
 
-`just test` removes `.jnprofile-typescript/build/` and compiles into it again, so the old output of a test that you deleted from `src` does not run. It runs each file there whose name ends in `.test.js`, `.test.mjs` or `.test.cjs`. A test imports the code with the `.js` ending, for example `import { add } from "./app.js"`, because the code runs from the build. The build has source maps and its own build info, whatever `tsconfig.json` says about `sourceMap` and `tsBuildInfoFile`. So c8 maps the coverage back to `src`, and an incremental project writes all of its output again.
+`just test` removes `.jnprofile-typescript/build/` and compiles into it again, so the old output of a test that you deleted from `src` does not run. It runs each file there whose name ends in `.test.js`, `.test.mjs`, `.test.cjs` or `.test.jsx`. A test imports the code with the `.js` ending, for example `import { add } from "./app.js"`, because the code runs from the build.
+
+The build reads `tsconfig.json` with `tsc --showConfig`, and sets these flags in place of the settings of the project:
+
+- **The output.** The output goes to the build, with the folders of the project, such as `build/src/app.js`. `noEmit` and `emitDeclarationOnly` are off, so tsc writes JavaScript.
+- **The declarations.** When `declaration` or `composite` is on, the declarations go to `build/types`, not to the `declarationDir` of the project. So a run writes no file outside the build.
+- **Source maps and build info.** The build has source maps and its own build info, whatever `tsconfig.json` says about `sourceMap` and `tsBuildInfoFile`. So c8 maps the coverage back to `src`, and an incremental project writes all of its output again.
+- **A test file that tsc does not compile** fails `just test`, because its tests would never run. An example is a file in `tests/` when the `include` names only `src`. Add its folder to the `include`. A test file that another runner owns, such as an end-to-end test, needs a name that the key `tests` does not match, such as `checkout.e2e.ts`.
+
+Some things work differently when the code runs from the build:
+
+- **Fixtures.** The build holds only the output of tsc. A test that reads a data file next to it, through `import.meta.dirname`, does not find it. Build the path from the top of the project, such as `path.join(process.cwd(), "src/fixtures/a.json")`.
+- **Path aliases.** tsc does not rewrite the aliases of `paths`, so node cannot find them. The `imports` of `package.json` name files in `dist`, not in the build. So use relative imports, such as `"./lib/a.js"`, in the code that the tests load.
+- **JSX.** With `jsx` set to `preserve`, tsc writes a `.test.tsx` file as `.test.jsx`, and node cannot run it, so `just test` fails on it. Set `jsx` to `react-jsx` for the tests.
+- **Other test names.** Only the names of the key `tests` of `profile.json` are test files. A file such as `app.spec.ts` counts as code, so `coverage-check` and `docstring-check` check it, and `just test` does not run it.
 
 c8 runs with `--clean`, so no coverage of an old run counts, whatever a `.c8rc.json` of the project says. It leaves out only the test files and `node_modules`, so a code file such as `src/__tests__/helper.ts` counts.
 

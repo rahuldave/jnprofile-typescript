@@ -43,28 +43,27 @@ test-paths *files:
 # just runs it in the folder of the project, so the line works also when another Justfile loads this project.
 # tsc stops with error TS18003 when the include list of tsconfig.json finds no file: a project with no code yet.
 # The build goes to a new folder each run, so the output of a test that you deleted from src does not run, and
-# no old coverage counts: c8 runs with --clean, whatever a .c8rc of the project says.
+# no old coverage counts: c8 runs with --clean, whatever a .c8rc of the project says. With jsx set to preserve, the
+# output of a .test.tsx file is a .test.jsx file.
 _test name *args:
     #!/usr/bin/env sh
     name="$1"; shift
     build=.jnprofile-typescript/build
-    rm -rf "$build"
-    # The build info goes into the build, so an incremental project writes all the output again. c8 needs the source
-    # maps as files, to map the coverage back to src.
-    out=$({{npm}} exec -- tsc --outDir "$build" --tsBuildInfoFile "$build/tsconfig.tsbuildinfo" --sourceMap true \
-        --inlineSourceMap false 2>&1) || code=$?
-    if [ -n "${code:-}" ]; then
-        if [ "$#" -eq 0 ] && printf '%s\n' "$out" | grep -q 'error TS18003'; then echo "just $name: no code yet"; exit 0; fi
-        printf '%s\n' "$out"
-        exit "$code"
+    # steps.py build compiles into the build with the flags that the build needs, and fails on a test file with no
+    # output. It exits with 3 when the include of tsconfig.json finds no file.
+    {{python_run}} {{ts_steps}} build || code=$?
+    if [ "${code:-0}" -eq 3 ]; then
+        if [ "$#" -eq 0 ]; then echo "just $name: no code yet"; exit 0; fi
+        echo "just $name: tsconfig.json finds no code"; exit 1
     fi
+    if [ "${code:-0}" -ne 0 ]; then exit "$code"; fi
     # The excludes take the place of the default list of c8, which also leaves out code files such as
     # src/__tests__/helper.ts and src/ab-test.ts. They leave out only the test files of the profile.
     if [ "$name" = cov ]; then
-        exec {{npm}} exec -- c8 --clean --exclude='**/*.test.{js,mjs,cjs}' --exclude='**/node_modules/**' \
+        exec {{npm}} exec -- c8 --clean --exclude='**/*.test.{js,mjs,cjs,jsx}' --exclude='**/node_modules/**' \
             --reporter=text --temp-directory=.jnprofile-typescript/c8-cov \
-            {{node}} --test "$@" "$build/**/*.test.js" "$build/**/*.test.mjs" "$build/**/*.test.cjs"
+            {{node}} --test "$@" "$build/**/*.test.js" "$build/**/*.test.mjs" "$build/**/*.test.cjs" "$build/**/*.test.jsx"
     fi
-    exec {{npm}} exec -- c8 --clean --exclude='**/*.test.{js,mjs,cjs}' --exclude='**/node_modules/**' \
+    exec {{npm}} exec -- c8 --clean --exclude='**/*.test.{js,mjs,cjs,jsx}' --exclude='**/node_modules/**' \
         --reporter=lcovonly --report-dir=.jnprofile-typescript --temp-directory=.jnprofile-typescript/c8 \
-        {{node}} --test "$@" "$build/**/*.test.js" "$build/**/*.test.mjs" "$build/**/*.test.cjs"
+        {{node}} --test "$@" "$build/**/*.test.js" "$build/**/*.test.mjs" "$build/**/*.test.cjs" "$build/**/*.test.jsx"
