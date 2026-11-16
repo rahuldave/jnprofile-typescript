@@ -7,6 +7,26 @@
     "tsconfig.json"
   ],
   "manifest": "package.json",
+  "code": [
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.mts",
+    "**/*.cts"
+  ],
+  "tests": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.test.mts",
+    "**/*.test.cts"
+  ],
+  "programs": [
+    {
+      "name": "node",
+      "check": "uvx --quiet --from nodejs-wheel==24.* node --version",
+      "expect": "v24.",
+      "description": "Node 24 and npm, which uv runs from the nodejs-wheel package. Install uv: https://docs.astral.sh/uv/"
+    }
+  ],
   "init": {
     "file": "package.json",
     "command": [
@@ -47,6 +67,7 @@
       },
       "recipes": "lint.just",
       "verify": [
+        "fmt-check",
         "lint"
       ],
       "parts": {
@@ -72,23 +93,42 @@
     "test": {
       "packages": [
         "typescript@7",
-        "@types/node@24"
+        "@types/node@24",
+        "c8@12"
       ],
       "files": {
         "tsconfig.json": "files/tsconfig.json"
       },
       "recipes": "test.just",
       "verify": [
-        "test"
+        "test",
+        "coverage-check"
       ],
       "parts": {
         "tsconfig.json": "files/tsconfig.json"
+      },
+      "lines": {
+        ".gitignore": [
+          ".jnprofile-typescript/"
+        ],
+        ".worktreedisposable": [
+          ".jnprofile-typescript/"
+        ]
       }
+    },
+    "docstring": {
+      "packages": [],
+      "recipes": "docstring.just",
+      "verify": [
+        "docstring-check"
+      ]
     }
   },
   "default_tools": [
     "lint",
-    "typecheck"
+    "typecheck",
+    "test",
+    "docstring"
   ],
   "base": {
     "recipes": "base.just",
@@ -104,6 +144,9 @@
         "node_modules/",
         "*.tsbuildinfo"
       ]
-    }
+    },
+    "programs": [
+      "node"
+    ]
   }
 }

@@ -4,6 +4,10 @@
 fmt *args:
     {{npm}} exec -- biome format --write "$@"
 
+# Check the format of the code, and change no file
+fmt-check:
+    {{npm}} exec -- biome format
+
 # Check the code against the rules in biome.json. Extra arguments go to biome: just lint --write
 lint *args:
     {{npm}} exec -- biome check "$@"

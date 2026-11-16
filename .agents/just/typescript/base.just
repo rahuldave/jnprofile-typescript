@@ -6,6 +6,10 @@ export npm_config_cache := ".local/npm-cache"
 node := "uvx --from 'nodejs-wheel==24.*' node"
 npm := "uvx --from 'nodejs-wheel==24.*' npm"
 
+# uv runs the helper script of the steps, steps.py, with Python 3.11 or later and no package
+python_run := "uv run --no-project --quiet --python '>=3.11' python"
+ts_steps := quote(source_directory() / "steps.py")
+
 # Install every dependency into node_modules, as package-lock.json says
 setup:
     {{npm}} install

@@ -14,7 +14,8 @@
   ],
   "install_extras": {
     "files": [
-      ".agents/just/typescript"
+      ".agents/just/typescript",
+      ".agents/targets/typescript"
     ]
   },
   "executables": {
