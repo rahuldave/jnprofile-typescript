@@ -1,19 +1,22 @@
-"""The helper of the steps of the typescript profile: test, integration, coverage-check, docstring-check and
-test-paths.
+"""The helper of the steps of the typescript profile: test, integration, coverage-check, docstring-check,
+api-check, api-prose-check and test-paths.
 
 The recipes in this folder run it with uv and Python 3.11 or later. Its commands are coverage [MODULE], docs,
-fresh NAME MODULE, ran NAME [ARG...], begin NAME [ARG...], stamp NAME, build NAME MODULE COUNT and
-test-paths FILE.... NAME is test or integration, and for build also cov. MODULE is the module file of the recipes.
-begin, stamp, fresh and ran tie each coverage report to the run ID JLOG_RUN of the root Justfile and to the worktree
-tree, so that coverage-check reads the reports of test and integration only from the same run. coverage-check runs
-diff-cover with uv. docstring-check runs eslint with npm exec, and node comes from the nodejs-wheel package, as in
-the recipes.
+fresh NAME MODULE, ran NAME [ARG...], begin NAME [ARG...], stamp NAME, build NAME MODULE COUNT,
+test-paths FILE..., api check, api prose [--base REF] and pages DOCS OUT FILE.... NAME is test, integration or
+prose, and for build test, cov or integration. MODULE is the module file of the recipes. begin, stamp, fresh and ran
+tie each coverage report, or the pass of api-prose-check, to the run ID JLOG_RUN of the root Justfile and to the
+worktree tree, so that coverage-check reads the reports of test and integration only from the same run, and a check
+that two steps need runs once. coverage-check runs diff-cover with uv. docstring-check runs eslint with npm exec, and
+node comes from the nodejs-wheel package, as in the recipes. api-check runs smalldocs with uv, and pages runs in its
+environment.
 
 The lists .agents/generated.txt and .agents/coverage-exclude.txt come from the parent commit, through
 git show HEAD:./PATH, so a commit cannot exempt its own code. With no parent, both lists are empty. git matches
 their patterns, as pathspecs with the magic word glob. Every path is relative to the current folder, the top of
 the project, which can be a subfolder of the git repository.
 """
+import importlib.util
 import json
 import os
 import re
@@ -22,6 +25,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 import xml.etree.ElementTree as ElementTree
 
 DIFF_COVER = 'diff-cover==11.0.1'
@@ -48,11 +52,27 @@ INTEGRATION_FOLDER = 'tests/integration'
 INTEGRATION = WORK / 'integration' / 'lcov.info'
 INTEGRATION_BUILD = WORK / 'integration-build'
 # The report of each run that coverage-check reads, the folder of the build of the run, and the raw data of c8.
-REPORTS = {'test': REPORT, 'integration': INTEGRATION}
+REPORTS = {'test': REPORT, 'integration': INTEGRATION, 'prose': None}
 BUILDS = {'test': BUILD, 'cov': BUILD, 'integration': INTEGRATION_BUILD}
-RAW = {'test': WORK / 'c8', 'integration': WORK / 'c8-integration'}
+RAW = {'test': WORK / 'c8', 'integration': WORK / 'c8-integration', 'prose': None}
 # The record of the installer. Its key steps names the steps of just check.
 RECORD = Path('.agents/stack.json')
+# smalldocs reads the API with TypeDoc, and node comes from the nodejs-wheel package, as in the recipes.
+SMALLDOCS = 'smalldocs==0.5.11'
+DOCS_CONFIG = Path('docs/_smalldocs.yml')
+# The default entry of the API: src/index.ts when it exists, otherwise each code file in src.
+ENTRY = Path('src/index.ts')
+SOURCE = 'src'
+# The checker of nossaifd, which the prose role installs. api prose checks the API pages with it.
+PROSE_CHECKER = Path('.agents/skills/nossaifd/scripts/check.py')
+# The gate of nossaifd, which the prose role installs too. Its base_commit gives the base of api-prose-check in CI or
+# with --base, so that prose-check and api-prose-check compare with the same commit.
+PROSE_GATE = Path('.agents/skills/nossaifd/scripts/prose_gate.py')
+# The variables from which base_commit takes the base in CI.
+BASE_VARIABLES = ('CI', 'GITHUB_BASE_REF', 'GITHUB_REF', 'GITHUB_EVENT_NAME', 'GITHUB_EVENT_PATH')
+# The source link of the API pages that api prose writes. It names the file of each item, so that the step can find
+# the page of a changed file.
+MARK = 'https://jnprofile-typescript.invalid/'
 # The build of test-paths, inside the project, so that node finds its package.json and its node_modules.
 PATHS_BUILD = WORK / 'test-paths'
 
@@ -265,22 +285,36 @@ def pending_file(name):
     return WORK / ('run.pending' if name == 'test' else f'{name}-run.pending')
 
 
-def begin(name, args):
-    """Save the run ID and the worktree tree before a run of NAME, test or integration, in its pending file.
+def run_key(name, args):
+    """What else a run of NAME with ARGS depends on, beside the run ID and the tree, or None when such a run is not
+    saved. A run of test or integration with ARGS runs only some tests, so it is not saved. api-prose-check takes
+    --base REF, and in CI its base comes from the variables of CI, so these go into the key: a run with another
+    base runs again. The commit of HEAD goes in too: a base resolves against HEAD, so a run on another HEAD with the
+    same tree runs again."""
+    if name == 'prose':
+        head = git('rev-parse', '-q', '--verify', 'HEAD').stdout.strip()
+        return {'args': list(args), 'env': {key: os.environ.get(key, '') for key in BASE_VARIABLES}, 'head': head}
+    return None if args else {}
 
-    Only a run of all the tests, with no ARGS, inside a run of just that has JLOG_RUN saves them. Any other run
-    saves nothing, so the next step that needs the report runs the tests again. The old report goes, so a failed run
-    leaves none. Returns the exit code, always 0.
+
+def begin(name, args):
+    """Save the run ID and the worktree tree before a run of NAME, test, integration or prose, in its pending file.
+
+    Only a run inside a run of just that has JLOG_RUN, and with a key of run_key, saves them. Any other run saves
+    nothing, so the next step that needs the run runs it again. The old report goes, so a failed run leaves none.
+    Returns the exit code, always 0.
     """
     WORK.mkdir(parents=True, exist_ok=True)
     for path in (run_file(name), pending_file(name), REPORTS[name]):
-        path.unlink(missing_ok=True)
+        if path is not None:
+            path.unlink(missing_ok=True)
     # The raw coverage of c8, so that no old run adds to the report, also with clean: false in a .c8rc of the project.
-    shutil.rmtree(RAW[name], ignore_errors=True)
-    run = os.environ.get('JLOG_RUN', '')
-    tree = worktree_tree() if not args and run else None
+    if RAW[name] is not None:
+        shutil.rmtree(RAW[name], ignore_errors=True)
+    run, key = os.environ.get('JLOG_RUN', ''), run_key(name, args)
+    tree = worktree_tree() if key is not None and run else None
     if tree:
-        pending_file(name).write_text(json.dumps({'run': run, 'tree': tree}) + '\n')
+        pending_file(name).write_text(json.dumps({'run': run, 'tree': tree, 'key': key}) + '\n')
     return 0
 
 
@@ -298,27 +332,35 @@ def stamp(name):
         pending_file(name).unlink(missing_ok=True)
     if isinstance(saved, dict) and saved.get('tree') and saved['tree'] == worktree_tree():
         # A run with no test passes and writes no report. It still counts as run, with no report.
-        saved['report'] = REPORTS[name].is_file()
+        saved['report'] = REPORTS[name] is not None and REPORTS[name].is_file()
         run_file(name).write_text(json.dumps(saved) + '\n')
     else:
-        print(f'{name}: a file changed while the tests ran, so the next step that needs them runs them again',
+        print(f'{recipe_of(name)}: a file changed during the run, so the next step that needs it runs it again',
               file=sys.stderr)
     return 0
 
 
-def same_run(name):
-    """The run ID when the last run of NAME that passed comes from this run of just, JLOG_RUN, and from the current
-    worktree tree, and the report that it wrote is still there. Otherwise None.
+def recipe_of(name):
+    """The recipe of the run NAME, for a message: prose is the run of api-prose-check."""
+    return 'api-prose-check' if name == 'prose' else name
+
+
+def same_run(name, args=()):
+    """The run ID when the last run of NAME that passed comes from this run of just, JLOG_RUN, from the current
+    worktree tree and from the same key of run_key for ARGS, and the report that it wrote is still there. Otherwise
+    None.
 
     A person can set JLOG_RUN by hand, so the tree must match too. An old run of the same tree is a valid run.
     """
-    run = os.environ.get('JLOG_RUN', '')
+    run, key = os.environ.get('JLOG_RUN', ''), run_key(name, args)
     try:
         saved = json.loads(run_file(name).read_text())
     except (OSError, ValueError):
         saved = None
-    if (run and isinstance(saved, dict) and saved.get('run') == run
-            and (not saved.get('report', True) or REPORTS[name].is_file())
+    report = REPORTS[name]
+    if (run and key is not None and isinstance(saved, dict) and saved.get('run') == run
+            and saved.get('key', {}) == key
+            and (report is None or not saved.get('report', True) or report.is_file())
             and saved.get('tree') and saved['tree'] == worktree_tree()):
         return run
     return None
@@ -357,11 +399,11 @@ def fresh(name, module):
 
 
 def ran(name, args):
-    """True when NAME passed before in this run of just and on this tree, and ARGS is empty. So the integration
-    tests, which coverage-check can run before the step integration, run once in just check."""
-    run = None if args else same_run(name)
+    """True when NAME passed before in this run of just, on this tree and with the same key of run_key for ARGS. So
+    a check that two steps of just check can need, such as integration or api-prose-check, runs once."""
+    run = same_run(name, args)
     if run:
-        print(f'{name}: it passed before in this run, {run}, on this tree, so it does not run again')
+        print(f'{recipe_of(name)}: it passed before in this run, {run}, on this tree, so it does not run again')
     return bool(run)
 
 
@@ -695,6 +737,299 @@ def test_paths(files):
     return 0 if ran else 5
 
 
+def api_entry(excluded):
+    """The default entry of the API, as a list of paths relative to the top: src/index.ts when it is a code file,
+    otherwise each code file in src. EXCLUDED holds the files of generated.txt. An empty list means no API."""
+    files = code_files(excluded)
+    if ENTRY.as_posix() in files:
+        return [ENTRY.as_posix()]
+    return [path for path in files if path.startswith(SOURCE + '/')]
+
+
+def api_settings(folder):
+    """The folder of the smalldocs config that api-check uses, and a note. It is docs/ when docs/_smalldocs.yml has
+    the key api. Otherwise it is FOLDER, with a config of the default entry of api_entry. With no entry, it is None."""
+    try:
+        text = DOCS_CONFIG.read_text()
+    except (OSError, UnicodeDecodeError):
+        text = ''
+    if re.search(r'^api\s*:', text, re.MULTILINE):
+        return DOCS_CONFIG.parent, f'the api settings of {DOCS_CONFIG}'
+    entry = api_entry(listed(parent_list(GENERATED)))
+    if not entry:
+        return None, (f'no {ENTRY} and no code file in {SOURCE}/. The key api of {DOCS_CONFIG} can name the entry')
+    root = top()
+    lines = ['api:', '  language: typescript', '  entry: ' + json.dumps([str(root / path) for path in entry])]
+    if Path('tsconfig.json').is_file():
+        lines.append('  tsconfig: ' + json.dumps(str(root / 'tsconfig.json')))
+    (folder / '_smalldocs.yml').write_text('\n'.join(lines + ['  out: api']) + '\n')
+    about = ENTRY.as_posix() if entry == [ENTRY.as_posix()] else f'the {len(entry)} code files in {SOURCE}/'
+    return folder, f'the entry {about}'
+
+
+def smalldocs(*args):
+    """The command that runs ARGS with smalldocs, and with node from the nodejs-wheel package on the PATH, for
+    TypeDoc."""
+    return ['uv', 'run', '--no-project', '--quiet', '--with', SMALLDOCS, '--with', 'nodejs-wheel==24.*', *args]
+
+
+def smalldocs_env():
+    """The environment of smalldocs: the cache of npm of the project, as an absolute path, so that npx keeps TypeDoc
+    in .local/npm-cache when it runs in another folder."""
+    return dict(os.environ, npm_config_cache=str(top() / '.local/npm-cache'))
+
+
+def ci_named():
+    """True when the variable CI is set to a value other than empty, false and 0. Only for the error of a missing
+    prose_gate.py: with prose_gate.py, its own ci_set decides."""
+    return os.environ.get('CI', '').strip().lower() not in ('', 'false', '0')
+
+
+def load_gate():
+    """The module prose_gate.py of the prose role, from the project, or None when the project does not have it."""
+    if not PROSE_GATE.is_file():
+        return None
+    # The import would write __pycache__ into the installed skill. The gate sets the flag itself, but too late.
+    sys.dont_write_bytecode = True
+    spec = importlib.util.spec_from_file_location('jnprofile_prose_gate', PROSE_GATE.resolve())
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def prose_base(option):
+    """The base of api-prose-check, as check-changed of nossaifd takes it, so that both check the same changes.
+
+    It is (None, None) with no option and no CI, for the changes since HEAD. Otherwise it is (commit, name), from
+    base_commit of prose_gate.py of the project: the merge base of the option --base REF and HEAD, or in CI the base
+    of the pull request or the push. On an error, it prints the message and gives (None, 2), so that no API page is
+    left out without a word. With no option and no CI, it does not load prose_gate.py, so a local run is as before.
+    """
+    if option is None and not ci_named():
+        return None, None
+    try:
+        gate = load_gate()
+    except Exception as exc:  # noqa: BLE001 - any failure of the import of another package is an error of the step
+        print(f'api-prose-check: {PROSE_GATE} cannot be loaded: {exc}', file=sys.stderr)
+        return None, 2
+    if gate is None or not hasattr(gate, 'base_commit') or not hasattr(gate, 'ci_set'):
+        print(f'api-prose-check: a base, from --base or from CI, needs base_commit of {PROSE_GATE}, and the project '
+              f'does not have it. Run just install to update the prose role', file=sys.stderr)
+        return None, 2
+    if option is None and not gate.ci_set():
+        return None, None
+    found = git('rev-parse', '--show-toplevel')
+    if found.returncode:
+        print(f'api-prose-check: git cannot find the top of the repository: {found.stderr.strip()}', file=sys.stderr)
+        return None, 2
+    try:
+        commit, name = gate.base_commit(Path(found.stdout.strip()), option)
+    except Exception as exc:  # noqa: BLE001 - a failure of base_commit of another package is an error of the step
+        print(f'api-prose-check: base_commit of {PROSE_GATE} failed: {exc!r}. Run just install to update the prose '
+              f'role', file=sys.stderr)
+        return None, 2
+    if commit is None:
+        print(f'api-prose-check: {name}', file=sys.stderr)
+        return None, 2
+    return commit, name
+
+
+def changed_since(base):
+    """The TypeScript files that changed since the commit or tree BASE, in the commits and in the working tree, and
+    the untracked ones, relative to the current folder. Deleted files are left out. None on an error of git."""
+    specs = [':(glob)' + pattern for pattern in CODE]
+    tracked = git('diff', '-z', '--name-only', '--relative', '--no-renames', '--diff-filter=d', base, '--', *specs)
+    untracked = git('ls-files', '-z', '--others', '--exclude-standard', '--', *specs)
+    if tracked.returncode or untracked.returncode:
+        print(f'api-prose-check: git cannot list the changes since {base}: '
+              f'{(tracked.stderr or untracked.stderr).strip()}', file=sys.stderr)
+        return None
+    return sorted(set(filter(None, tracked.stdout.split('\0'))) | set(filter(None, untracked.stdout.split('\0'))))
+
+
+def api(action, option=None):
+    """Run the api check: smalldocs api check with the settings of api_settings, for ACTION check. For ACTION prose,
+    check the API page of each changed file with the checker of nossaifd. A changed file changed since HEAD, or
+    since the base of prose_base, from OPTION, the value of --base, or from CI. Returns the exit code."""
+    if action == 'prose' and not PROSE_CHECKER.is_file():
+        print(f'api-prose-check: no checker of nossaifd at {PROSE_CHECKER}, so the API pages are not checked. The prose '
+              f'role installs it')
+        return 0
+    base = about_base = None
+    if action == 'prose':
+        base, about_base = prose_base(option)
+        if base is None and about_base is not None:
+            return about_base
+    with tempfile.TemporaryDirectory() as temp:
+        folder, about = api_settings(Path(temp))
+        if folder is None:
+            print(f'{"api-check" if action == "check" else "api-prose-check"}: {about}, so there is no API to check')
+            return 0
+        if action == 'check':
+            print(f'api-check: smalldocs api check, with {about}', flush=True)
+            code = subprocess.run(smalldocs('smalldocs', 'api', 'check', '--dir', str(folder)),
+                                  env=smalldocs_env()).returncode
+            if code == 1:
+                print('api-check: give each exported function, class, interface, type and constant a JSDoc comment, '
+                      'and each file a module comment with the tag @module. Give each parameter a comment after it on '
+                      'its line, or a @param line, and the return a @returns line', file=sys.stderr)
+            elif code:
+                print(f'api-check: smalldocs or uv failed with the exit code {code}. When smalldocs cannot read the '
+                      f'API, the key api of {DOCS_CONFIG} can name the entry', file=sys.stderr)
+            return code
+        excluded = listed(parent_list(GENERATED))
+        if base is not None:
+            changed = changed_since(base)
+            if changed is None:
+                return 2
+            changed = sorted(set(changed) & set(code_files(excluded)))
+        elif has_parent():
+            tracked, untracked = changed_code()
+            changed = sorted(set(tracked + untracked) & set(code_files(excluded)))
+        else:
+            changed = code_files(excluded)
+        since = f'since {about_base}' if base is not None else 'since HEAD'
+        if not changed:
+            print(f'api-prose-check: no code changed {since}')
+            return 0
+        out = Path(temp) / 'pages'
+        out.mkdir()
+        sys.stdout.flush()
+        code = subprocess.run(smalldocs('python', str(Path(__file__).resolve()), 'pages', str(folder), str(out),
+                                        *changed), env=smalldocs_env()).returncode
+        if code:
+            return code
+        pages = sorted(out.rglob('*.md'))
+        if not pages:
+            print('api-prose-check: no changed file has an API page or a module comment')
+            return 0
+        names = [page.relative_to(out / 'pages').with_suffix('').as_posix() if page.is_relative_to(out / 'pages')
+                 else f"the module comment of {page.relative_to(out / 'modules').with_suffix('').as_posix()}"
+                 for page in pages]
+        print(f'api-prose-check: the API pages {", ".join(names)}, of the files changed {since}', flush=True)
+        code = subprocess.run(['uv', 'run', '--no-project', '--quiet', 'python', str(PROSE_CHECKER),
+                               *map(str, pages)]).returncode
+        if code:
+            print('api-prose-check: fix each hard problem in the JSDoc comment that it comes from', file=sys.stderr)
+        return code
+
+
+def absolute(value, folder):
+    """VALUE, a path or a list of paths of a smalldocs config in FOLDER, with each path absolute."""
+    if isinstance(value, list):
+        return [absolute(item, folder) for item in value]
+    return str((folder / value).resolve()) if isinstance(value, str) else value
+
+
+def linked_files(text):
+    """The files that the source links of the page TEXT name, as paths relative to the top of the project.
+
+    smalldocs writes each link as MARK, the path relative to the root of the api settings, which pages() sets to the
+    top of the project, and #L with the line. It percent-encodes a path with a space, a # or a letter outside ASCII.
+    """
+    found = set()
+    for match in re.finditer(re.escape(MARK) + r'([^)\s#]+)', text):
+        found.add(urllib.parse.unquote(match.group(1)))
+    return found
+
+
+def module_comment(path):
+    """The text of the module comment of the file PATH, a JSDoc comment with the tag @module or @packageDocumentation,
+    with no * at the start of its lines and no tags. None when the file has none."""
+    try:
+        source = Path(path).read_text(errors='replace')
+    except OSError:
+        return None
+    for match in re.finditer(r'/\*\*(.*?)\*/', source, re.S):
+        body = match.group(1)
+        if re.search(r'@(module|packageDocumentation)\b', body):
+            lines = [re.sub(r'^\s*\* ?', '', line) for line in body.splitlines()]
+            return '\n'.join(line for line in lines if not line.lstrip().startswith('@')).strip() or None
+    return None
+
+
+def pages(folder, out, files):
+    """Write the API page of each changed file of FILES under OUT, as a Markdown file, from the TypeScript sections of
+    the key api of the smalldocs config in FOLDER.
+
+    It runs with smalldocs, whose PyYAML reads the config. It writes a config of its own in OUT, with absolute paths,
+    the top of the project as the root, and a source link MARK, and smalldocs builds the pages there. A page is a
+    page of a changed file when the source link of one of its items names that file. A changed file with no item of
+    its own, such as an index that only exports again, has no such page. Its module comment, which a page shows,
+    then goes into a page of its own. Returns the exit code.
+    """
+    import yaml
+
+    folder, out = Path(folder).resolve(), Path(out)
+    settings = (yaml.safe_load((folder / '_smalldocs.yml').read_text()) or {}).get('api') or {}
+    sections = [section for section in (settings if isinstance(settings, list) else [settings])
+                if isinstance(section, dict) and section.get('language') == 'typescript']
+    config = out / 'config'
+    config.mkdir()
+    own = []
+    for number, section in enumerate(sections):
+        section = dict(section, out=f'api{number}', source=MARK.rstrip('/'), root=str(top()))
+        for key in ('entry', 'tsconfig'):
+            if key in section:
+                section[key] = absolute(section[key], folder)
+        own.append(section)
+    if not own:
+        print('api-prose-check: the api settings have no section with language: typescript')
+        return 0
+    (config / '_smalldocs.yml').write_text(yaml.safe_dump({'api': own}))
+    sys.stdout.flush()
+    build = subprocess.run(['smalldocs', 'api', 'build', '--dir', str(config)], capture_output=True, text=True)
+    if build.returncode:
+        print(build.stdout + build.stderr, end='')
+        print('api-prose-check: smalldocs cannot build the API pages', file=sys.stderr)
+        return build.returncode
+    wanted = {Path(name).as_posix() for name in files}
+    shown = set()
+    for number in range(len(own)):
+        built = config / f'api{number}'
+        for page in sorted(built.rglob('*.qmd')):
+            text = page.read_text()
+            named = linked_files(text) & wanted
+            if named:
+                shown |= named
+                # The pages keep their folders, so that a/b.qmd and a.b.qmd stay two pages.
+                target = out / 'pages' / (f'{number}' if len(own) > 1 else '') / page.relative_to(built)
+                target = target.with_suffix('.md')
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text)
+    for name in sorted(wanted - shown):
+        comment = module_comment(name)
+        if comment:
+            target = out / 'modules' / (name + '.md')
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(f'---\ntitle: "{Path(name).name}"\n---\n\n{comment}\n')
+    return 0
+
+
+def base_option(args):
+    """The REF of the arguments ARGS of api-prose-check, --base REF or --base=REF, or '' with no base. As in
+    check-changed of nossaifd, -v is taken and does nothing here, and the last --base counts. On an error, it prints
+    the message and gives the exit code 2."""
+    ref = ''
+    rest = list(args)
+    while rest:
+        arg = rest.pop(0)
+        if arg == '-v':
+            continue
+        if arg == '--base' and rest:
+            ref = rest.pop(0)
+        elif arg.startswith('--base='):
+            ref = arg[len('--base='):]
+        else:
+            print(f'api-prose-check: unknown arguments {" ".join(args)}. It takes only --base REF and -v',
+                  file=sys.stderr)
+            return 2
+        if not ref:
+            print('api-prose-check: --base needs a branch or a commit', file=sys.stderr)
+            return 2
+    return ref
+
+
 def main(argv):
     """Run the command of ARGV, as the docstring of the module lists them, and return its exit code."""
     if argv[:1] == ['coverage'] and len(argv) <= 2:
@@ -713,8 +1048,16 @@ def main(argv):
         return test_paths(argv[1:])
     if argv[:1] == ['build'] and len(argv) == 4 and argv[1] in BUILDS:
         return build(*argv[1:])
+    if argv == ['api', 'check']:
+        return api('check')
+    if argv[:2] == ['api', 'prose']:
+        option = base_option(argv[2:])
+        return option if isinstance(option, int) else api('prose', option or None)
+    if argv[:1] == ['pages'] and len(argv) >= 3:
+        return pages(argv[1], argv[2], argv[3:])
     print('usage: steps.py coverage [MODULE] | docs | fresh NAME MODULE | ran NAME [ARG...] | begin NAME [ARG...] | '
-          'stamp NAME | build NAME MODULE COUNT | test-paths [FILE...]', file=sys.stderr)
+          'stamp NAME | build NAME MODULE COUNT | test-paths [FILE...] | api check | api prose [--base REF] | '
+          'pages DOCS OUT [FILE...]', file=sys.stderr)
     return 2
 
 

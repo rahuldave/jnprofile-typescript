@@ -4,7 +4,9 @@ title: The tools
 
 Each tool of the profile brings its packages, its recipes and its parts. The installer adds the packages to the `devDependencies` of `package.json` with npm.
 
-The default tools are `lint`, `typecheck`, `test` and `docstring`. Together they fill six steps of `just check`, which are `fmt-check`, `lint`, `typecheck`, `test`, `coverage-check` and `docstring-check`. The tool `integration` is not a default tool. It fills the step `integration`. A step is one recipe that `just check` runs. No step has a shebang line, so jlog, the program that logs each line of a recipe, logs the line of each step and its exit code.
+The default tools are `lint`, `typecheck`, `test`, `docstring` and `api`. The first four fill six steps of `just check`, which are `fmt-check`, `lint`, `typecheck`, `test`, `coverage-check` and `docstring-check`. The tool `integration` is not a default tool. It fills the step `integration`. The tool `api` runs in the step `docs-check` of the docs role.
+
+A step is one recipe that `just check` runs. No step has a shebang line, so jlog, the program that logs each line of a recipe, logs the line of each step and its exit code.
 
 ## The base
 
@@ -135,10 +137,68 @@ The test files, the declaration files, the files in `.agents`, `.claude` and `.c
 
 The profile names its files for the commit gates. The code is `**/*.ts`, `**/*.tsx`, `**/*.mts` and `**/*.cts`. The test files are `**/*.test.ts`, `**/*.test.tsx`, `**/*.test.mts` and `**/*.test.cts`. `test-parent` copies only the test files into the parent commit, so no new code reaches it.
 
+## api
+
+The tool has no package in `package.json`. uv runs smalldocs 0.5.11 with node from the `nodejs-wheel` package. smalldocs reads the API with TypeDoc. When the project has no TypeDoc, npx fetches TypeDoc 0.28 into `.local/npm-cache`. The tool is a default tool, and its check runs in a project with the docs role of jnterfaces.
+
+| Recipe | What it does |
+|---|---|
+| `just api-check` | Runs `smalldocs api check`. It fails on each exported function, class, interface, type or constant with no JSDoc comment. It also fails on each file with no module comment, and on each parameter or return with no comment. It names the file and the item, for example `app:add(a): no comment`. Then it runs `api-prose-check` |
+| `just api-prose-check` | Checks the API page of each changed file with the checker of nossaifd. A changed file is a code file with a change against `HEAD`, or each code file on the first commit. In CI, or with `--base REF`, it is a file with a change since the base, as for `prose-check`: `just api-prose-check --base main` |
+
+What `api-check` needs:
+
+- **A module comment** for each file. Put a JSDoc comment with the tag `@module` at the top of the file.
+- **A JSDoc comment** for each exported item.
+- **A comment for each parameter.** Put a `//` comment after the parameter, on its line, or a `@param` line in the JSDoc comment.
+- **A comment for the return.** Put a `@returns` line in the JSDoc comment. smalldocs also reads a `//` comment after the `{` of the body, but biome moves that comment into the body, so `fmt-check` fails on it. A function that returns `void` needs no comment on its return.
+
+```ts
+/**
+ * The arithmetic of the app.
+ * @module
+ */
+
+/**
+ * Add two numbers.
+ * @returns the sum
+ */
+export function add(
+  a: number, // the first number
+  b: number, // the second number
+): number {
+  return a + b;
+}
+```
+
+The settings of `api-check`:
+
+- **With a key `api` in `docs/_smalldocs.yml`**, smalldocs reads its settings there. The key `entry` names the entry points, and `language` is `typescript`.
+- **Otherwise**, the step writes a temporary config, with `language: typescript`. Its entry is `src/index.ts` when that file exists. Then the API is what the index exports. Without `src/index.ts`, the entry is each code file in `src/`, and each file gets its own page. The test files, the declaration files and the files that `.agents/generated.txt` of the parent commit names do not count.
+- **With no `src/index.ts` and no code file in `src/`**, the step passes and says that there is no API to check.
+- **When TypeDoc fails**, smalldocs exits with 2, and the step says so. An example is an entry that `tsconfig.json` does not find.
+
+The files of the API are the code files in `src/` with the default settings, because the entry and the files that it exports are there. With a key `api`, they are the entry files and the code files in their folders. The alias `@api` of the commit gates is to name these files. The gate does not fill `@api` yet, so no target needs them now.
+
+Where the checks run:
+
+- **`api-check`** runs in the step `docs-check` of the docs role of jnterfaces. That step runs the `api-check` of each language that has one. The comments are a check of the docs site, so without the docs role no step of `just check` runs `api-check`. You can still run `just api-check`, and `just verify` runs it.
+- **`api-prose-check`** runs in `api-check`. The step `prose-check` of nossaifd runs it too. It runs once in a run. When it passed before in the same run of `just check`, on the same tree and with the same base, it says so and does not run again. A call with another base runs again.
+
+The changed files of `api-prose-check`:
+
+- **On a machine**, without CI and without `--base`, the step does not load `prose_gate.py`. A changed file has a change against `HEAD`, in the index or the working tree, or is a new file.
+- **In CI**, a checkout is clean, so the changes against `HEAD` hold no file. So in CI the step takes the base that `prose-check` of nossaifd takes. On a pull request, the base is the merge base of the base branch and `HEAD`. CI is on when the variable `CI` is set to a value other than empty, `false` and `0`.
+- **With `--base REF`**, the base is the merge base of `REF` and `HEAD`, also outside CI. As in `check-changed` of nossaifd, the last `--base` counts, and `-v` does nothing here.
+- **The rule of the base** is not in this profile. The step loads `.agents/skills/nossaifd/scripts/prose_gate.py`, which the prose role installs, and calls its `base_commit`. So in CI, both steps compare with the same commit. The load writes no bytecode into the skill.
+- **An error of the base**, as a shallow clone or a base that is not a commit, fails the step with exit 2 and the message of nossaifd. An install of nossaifd with no `base_commit` fails the step with exit 2 in CI or with `--base`, and asks you to run `just install`.
+
+`api-prose-check` builds the API pages in a temporary folder outside the project, with the TypeScript sections of the settings. The page of a changed file is each page with an item from that file. A changed file with no item of its own, such as an index that only exports again, has no such page, so the step checks its module comment.
+
+Then the step runs `.agents/skills/nossaifd/scripts/check.py` on those pages. A hard problem fails the step. Fix it in the JSDoc comment or the comment that it comes from. Without the prose role, which installs the checker, the step passes and says so.
+
+The tool adds `.jnprofile-typescript/` to `.gitignore` and to `.worktreedisposable`. That folder holds the run ID of `api-prose-check`.
+
 ## The language layer
 
 The profile installs `.agents/targets/typescript/`. It holds the TypeScript rules that the agentic targets add to their base task, in the files `review.md`, `test-review.md`, `docs.md` and `prose.md`. For example, `test-review.md` says that each new `/* c8 ignore */` needs a reason.
-
-## No API pages yet
-
-smalldocs 0.5.5 reads the API of Python only. So the profile has no `api` tool and no `api` step, and `docs-check` checks the pages of the site alone. An `api` tool comes after the release of smalldocs that reads JSDoc.

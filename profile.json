@@ -147,13 +147,29 @@
       "verify": [
         "docstring-check"
       ]
+    },
+    "api": {
+      "packages": [],
+      "recipes": "api.just",
+      "verify": [
+        "api-check"
+      ],
+      "lines": {
+        ".gitignore": [
+          ".jnprofile-typescript/"
+        ],
+        ".worktreedisposable": [
+          ".jnprofile-typescript/"
+        ]
+      }
     }
   },
   "default_tools": [
     "lint",
     "typecheck",
     "test",
-    "docstring"
+    "docstring",
+    "api"
   ],
   "base": {
     "recipes": "base.just",
