@@ -3,13 +3,13 @@ api-check, api-prose-check and test-paths.
 
 The recipes in this folder run it with uv and Python 3.11 or later. Its commands are coverage [MODULE], docs,
 fresh NAME MODULE, ran NAME [ARG...], begin NAME [ARG...], stamp NAME, build NAME MODULE COUNT,
-test-paths FILE..., api check, api prose [--base REF], pages DOCS OUT FILE... and config DOCS OUT. NAME is test, integration or
-prose, and for build test, cov or integration. MODULE is the module file of the recipes. begin, stamp, fresh and ran
-tie each coverage report, or the pass of api-prose-check, to the run ID JLOG_RUN of the root Justfile and to the
-worktree tree, so that coverage-check reads the reports of test and integration only from the same run, and a check
-that two steps need runs once. coverage-check runs diff-cover with uv. docstring-check runs eslint with npm exec, and
-node comes from the nodejs-wheel package, as in the recipes. api-check runs smalldocs with uv, and pages runs in its
-environment.
+test-paths FILE..., api check, api prose [--base REF], pages DOCS OUT FILE... and config DOCS OUT. NAME is test,
+integration or prose, and for build test, cov or integration. MODULE is the module file of the recipes. begin, stamp,
+fresh and ran tie each coverage report, or the pass of api-prose-check, to the run ID JLOG_RUN of the root Justfile
+and to the worktree tree, so that coverage-check reads the reports of test and integration only from the same run,
+and a check that two steps need runs once. coverage-check runs diff-cover with uv. docstring-check runs eslint with
+npm exec, and node comes from the nodejs-wheel package, as in the recipes. api-check runs smalldocs with uv, and
+pages runs in its environment.
 
 The lists .agents/generated.txt and .agents/coverage-exclude.txt come from the parent commit, through
 git show HEAD:./PATH, so a commit cannot exempt its own code. With no parent, both lists are empty. git matches
@@ -19,8 +19,8 @@ the project, which can be a subfolder of the git repository.
 import importlib.util
 import json
 import os
-import re
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -147,7 +147,8 @@ def changed_code():
     for run in (tracked, untracked):
         if run.returncode:
             raise SystemExit(f'steps.py: git cannot list the changed files: {run.stderr.strip()}')
-    names = lambda run: sorted(set(filter(None, run.stdout.split('\0'))))
+    def names(run):
+        return sorted(set(filter(None, run.stdout.split('\0'))))
     return names(tracked), names(untracked)
 
 
@@ -869,8 +870,8 @@ def api(action, option=None):
     check the API page of each changed file with the checker of nossaifd. A changed file changed since HEAD, or
     since the base of prose_base, from OPTION, the value of --base, or from CI. Returns the exit code."""
     if action == 'prose' and not PROSE_CHECKER.is_file():
-        print(f'api-prose-check: no checker of nossaifd at {PROSE_CHECKER}, so the API pages are not checked. The prose '
-              f'role installs it')
+        print(f'api-prose-check: no checker of nossaifd at {PROSE_CHECKER}, so the API pages are not checked. '
+              f'The prose role installs it')
         return 0
     base = about_base = None
     if action == 'prose':
@@ -890,8 +891,9 @@ def api(action, option=None):
                                   env=smalldocs_env()).returncode
             if code == 1:
                 print('api-check: give each exported function, class, interface, type and constant a JSDoc comment, '
-                      'and each file a module comment: a JSDoc comment at its top, before its imports. Give each parameter '
-                      'a comment after it on its line, or a @param line, and the return a @returns line', file=sys.stderr)
+                      'and each file a module comment: a JSDoc comment at its top, before its imports. Give each '
+                      'parameter a comment after it on its line, or a @param line, and the return a @returns line',
+                      file=sys.stderr)
             elif code:
                 print(f'api-check: smalldocs or uv failed with the exit code {code}. When smalldocs cannot read the '
                       f'API, the key api of {DOCS_CONFIG} can name the entry', file=sys.stderr)
@@ -957,7 +959,8 @@ def linked_files(text):
 # comment that is no JSDoc comment, such as a licence or /**/, may come before it and after it. An import, a re-export,
 # a directive, another JSDoc comment or the end of the file must follow it.
 OTHER_COMMENT = r'(?>//[^\n]*|/\*(?!\*[^/])(?:(?!\*/).)*\*/)\s*'
-HEADER = re.compile(rf'\ufeff?(?:#![^\n]*\n)?\s*(?:{OTHER_COMMENT})*+/\*\*(?!/)((?:(?!\*/).)*)\*/\s*(?:{OTHER_COMMENT})*+'
+HEADER = re.compile(rf'\ufeff?(?:#![^\n]*\n)?\s*(?:{OTHER_COMMENT})*+/\*\*(?!/)((?:(?!\*/).)*)\*/\s*'
+                    rf'(?:{OTHER_COMMENT})*+'
                     r'(?=import\b|export\s+(?:type\s+)?(?:\*|\{[^}]*\}\s*from)|["\']use \w+["\']|/\*\*|$)', re.S)
 
 

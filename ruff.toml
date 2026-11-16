@@ -1,0 +1,9 @@
+# The lint of the Python scripts of the profile: just lint runs ruff with these settings.
+line-length = 120
+target-version = "py39"
+
+[lint]
+select = ["E", "F", "W", "B", "I"]
+
+[lint.isort]
+force-sort-within-sections = true
