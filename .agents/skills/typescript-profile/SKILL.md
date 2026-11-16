@@ -17,15 +17,28 @@ them out.
 | Tool | Packages | Recipes | Parts in config files | Lines in `.gitignore` and `.worktreedisposable` |
 |---|---|---|---|---|
 | none, always there | none | `setup` | none | `node_modules/`, `*.tsbuildinfo`; also `dist/` and `.local/` in `.gitignore` |
-| `lint` | `@biomejs/biome@2` | `fmt`, `lint` | `biome.json` | none |
+| `lint` | `@biomejs/biome@2` | `fmt`, `fmt-check`, `lint` | `biome.json` | none |
 | `typecheck` | `typescript@7`, `@types/node@24` | `typecheck` | `tsconfig.json` | none |
-| `test` | `typescript@7`, `@types/node@24` | `build`, `test` | `tsconfig.json` | none |
+| `test` | `typescript@7`, `@types/node@24`, `c8@12` | `build`, `test`, `coverage-check`, `cov`, `test-paths` | `tsconfig.json` | `.jnprofile-typescript/` |
+| `docstring` | none: `npm exec` runs eslint | `docstring-check` | none | none |
 
-The default tools are `lint` and `typecheck`. When `tsconfig.json` finds
+The default tools are `lint`, `typecheck`, `test` and `docstring`. When `tsconfig.json` finds
 no code yet, `just typecheck` and `just test` pass. tsc then stops with the
-error TS18003, and the recipes look for it. `just test` runs every `*.test.js` file in
-`dist`, also the file of a test that you deleted from `src`. Remove `dist`
-to drop the old files.
+error TS18003, and the recipes look for it. `just test` compiles into a new
+`.jnprofile-typescript/build` each time, and runs every `*.test.js`,
+`*.test.mjs` and `*.test.cjs` file there.
+
+## The steps of just check
+
+- **`test`** writes the coverage as LCOV to `.jnprofile-typescript/lcov.info`, with c8.
+- **`coverage-check`** fails on each changed line of code that no test runs.
+  On the first commit, each line must run. Put `/* c8 ignore next */` above a
+  line that no test can run. A file of generated code goes in
+  `.agents/generated.txt`, in a commit of its own before the code.
+- **`docstring-check`** fails on each class, method, function or arrow
+  function with no JSDoc comment `/** ... */`, exported or not. It names the
+  file and the line, so write a comment for each line that it lists.
+- **`fmt-check`** fails when `just fmt` would change a file.
 
 ## Parts in shared files
 

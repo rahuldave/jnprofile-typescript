@@ -14,7 +14,7 @@ Run this command in a project that has the jnterfaces installer:
 just install --profile typescript
 ```
 
-In a folder with no `package.json`, the command first runs `npm init --yes`. It then installs the tools `lint` and `typecheck`. If you do not choose other roles, it also turns on the default roles of the profile, `tasker` and `prose`. The section [The roles](https://rahuldave.github.io/jnterfaces/#roles) of the jnterfaces guide says what each role installs.
+In a folder with no `package.json`, the command first runs `npm init --yes`. It then installs the default tools `lint`, `typecheck`, `test` and `docstring`. If you do not choose other roles, it also turns on the default roles of the profile, `tasker` and `prose`. The section [The roles](https://rahuldave.github.io/jnterfaces/#roles) of the jnterfaces guide says what each role installs.
 
 Then add or remove a tool:
 
@@ -29,11 +29,12 @@ The machine needs `just` and `uv`. `uv` runs node and npm from the `nodejs-wheel
 
 | Tool | Packages | Recipes |
 |---|---|---|
-| `lint` | biome | `just fmt`, `just lint` |
+| `lint` | biome | `just fmt`, `just fmt-check`, `just lint` |
 | `typecheck` | typescript, @types/node | `just typecheck` |
-| `test` | typescript, @types/node | `just build`, `just test` |
+| `test` | typescript, @types/node, c8 | `just build`, `just test`, `just coverage-check`, `just cov`, `just typescript::test-paths` |
+| `docstring` | none, because npm exec runs eslint | `just docstring-check` |
 
-[The tools](tools.md) gives each recipe and each part that a tool adds to a config file.
+The tools fill six steps of `just check`, which are `fmt-check`, `lint`, `typecheck`, `test`, `coverage-check` and `docstring-check`. `coverage-check` fails on each changed line that no test runs. `docstring-check` fails on each function or class with no JSDoc comment. [The tools](tools.md) gives each recipe and each part that a tool adds to a config file.
 
 ## How the parts work
 
