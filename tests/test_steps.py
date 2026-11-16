@@ -481,6 +481,16 @@ class StepTests(Project):
         code, out = self.just("typescript::fmt-check")
         self.assertEqual(code, 0, out)
 
+    def test_fmt_check_leaves_markdown_to_the_prose_check(self) -> None:
+        # The docs role of jnterfaces writes docs/index.md with front matter. biome must not format a page.
+        # The config of the profile, not the one of this lab, which reads src only.
+        self.write("biome.json", (REPO / "files/lint.json").read_text())
+        # That config also reads the JSON files of the lab, so they get the format of biome.
+        self.assertEqual(self.just("typescript::fmt", "package.json", "tsconfig.json")[0], 0)
+        self.write("docs/index.md", "---\ntitle: Home\n---\n\nThe home page.\n")
+        code, out = self.just("typescript::fmt-check")
+        self.assertEqual(code, 0, out)
+
 
 TEST_FILES = {
     "src/pass.test.ts": 'import { test } from "node:test";\nimport { add } from "./app.js";\n\n'
