@@ -20,6 +20,14 @@ REPO = Path(__file__).resolve().parents[1]
 FOLDER = REPO / ".agents/just/typescript"
 PROFILE = json.loads((REPO / "profile.json").read_text())
 NPM = ["uvx", "--quiet", "--from", "nodejs-wheel==24.*", "npm"]
+def clean_env(environ) -> dict:
+    """The variables of ENVIRON for a project of the tests: without those of git, the run ID of jlog, and the
+    variables of CI, such as CI and GITHUB_EVENT_NAME, that set the base of api-prose-check. A test that needs CI
+    sets them itself."""
+    return {k: v for k, v in environ.items()
+            if not k.startswith(("GIT_", "GITHUB_")) and k not in ("JLOG_RUN", "CI")}
+
+
 # The module file as just install writes it, without the shell of jlog.
 MODULE = """set positional-arguments
 set working-directory := '../..'
@@ -38,7 +46,8 @@ TSCONFIG = {
 BIOME = ('{\n  "files": { "includes": ["src/**"] },\n  "formatter": { "indentStyle": "space", "lineWidth": 120 }\n}\n')
 PACKAGE = {"name": "app", "version": "0.0.0", "type": "module", "private": True}
 CODE = "/** Add A and B. */\nexport function add(a: number, b: number): number {\n  return a + b;\n}\n"
-TEST = ('import { test } from "node:test";\nimport assert from "node:assert/strict";\nimport { add } from "./app.js";\n\n'
+TEST = ('import { test } from "node:test";\nimport assert from "node:assert/strict";\n'
+        'import { add } from "./app.js";\n\n'
         'test("add", () => {\n  assert.equal(add(1, 2), 3);\n});\n')
 UNTESTED = "\n/** Subtract B from A. */\nexport function sub(a: number, b: number): number {\n  return a - b;\n}\n"
 # A case that no test runs. c8 marks only its line as not run, so /* c8 ignore next */ above that line exempts it.
@@ -112,7 +121,7 @@ class Project(unittest.TestCase):
         self.write(".gitignore", IGNORE)
         self.write("src/app.ts", CODE)
         self.write("src/app.test.ts", TEST)
-        self.env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") and k != "JLOG_RUN"}
+        self.env = clean_env(os.environ)
         self.env.update(GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.com", GIT_COMMITTER_NAME="t",
                         GIT_COMMITTER_EMAIL="t@example.com")
         self.git("init", "-q")
@@ -672,10 +681,10 @@ class IntegrationTests(Project):
         self.assertIn("integration: it passed before in this run, run-1, on this tree, so it does not run again", out)
         self.assertNotIn("✔ twice", out)
         # Another run, a change to the tree, or an argument runs them again.
-        for env, change in ((dict(self.env, JLOG_RUN="run-2"), False), (env, True)):
+        for other, change in ((dict(self.env, JLOG_RUN="run-2"), False), (env, True)):
             if change:
                 self.write("src/app.ts", CODE + ONLY_INTEGRATION + "\n")
-            code, out = self.just("typescript::integration", env=env)
+            code, out = self.just("typescript::integration", env=other)
             self.assertEqual(code, 0, out)
             self.assertIn("✔ twice", out)
         code, out = self.just("typescript::integration", "--test-name-pattern=twice", env=env)
@@ -815,6 +824,19 @@ class ApiTests(Project):
         # The test file is no part of the API, though it has no JSDoc.
         self.assertNotIn("app.test", out)
 
+    def test_api_check_and_api_prose_check_take_python_3_11_when_uv_would_take_an_older_one(self) -> None:
+        # smalldocs needs Python 3.11. With UV_PYTHON=3.9, as on a machine whose first Python is 3.9, uv would take
+        # 3.9 and find no smalldocs, unless the step names the version.
+        self.prose_role()
+        self.write("src/app.ts", DOCUMENTED)
+        self.commit()
+        self.write("src/app.ts", DOCUMENTED.replace("the first number", "the WRONGWORD number"))
+        env = dict(self.env, UV_PYTHON="3.9")
+        code, out = self.just("typescript::api-check", env=env)
+        self.assertEqual(code, 1, out)
+        self.assertIn("the WRONGWORD number", out)
+        self.assertNotIn("No solution found", out)
+
     def test_the_entry_is_src_index_ts_when_it_exists(self) -> None:
         self.write("src/app.ts", DOCUMENTED)
         # A file that the index does not export is no part of the API.
@@ -854,7 +876,8 @@ class ApiTests(Project):
 
     def checked(self, out: str) -> list:
         """The pages that the checker of the tests got, as their paths, from the output OUT."""
-        return [line.split(" ", 1)[1] for line in out.splitlines() if line.startswith("PAGE ") and "/modules/" not in line]
+        return [line.split(" ", 1)[1] for line in out.splitlines()
+                if line.startswith("PAGE ") and "/modules/" not in line]
 
     def test_a_changed_file_with_a_space_or_a_letter_outside_ascii_in_its_name_is_checked(self) -> None:
         self.prose_role()
@@ -1013,7 +1036,8 @@ class ApiTests(Project):
         self.write("src/app.ts", DOCUMENTED.replace("the first number", "the WRONGWORD number"))
         code, out = self.just("typescript::api-prose-check")
         self.assertEqual(code, 1, out)
-        self.assertIn("api-prose-check: the API pages app, the module comment of src/app.ts, of the files changed since HEAD", out)
+        self.assertIn("api-prose-check: the API pages app, the module comment of src/app.ts, of the files changed "
+                      "since HEAD", out)
         self.assertIn("the WRONGWORD number", out)
         self.assertNotIn("function other", out)
         pages = [line.split(" ", 1)[1] for line in out.splitlines() if line.startswith("PAGE ")]
@@ -1193,6 +1217,14 @@ YAML_API = ("import json, yaml\n"
 ON = {"tools": ["typescript:lint", "typescript:api"], "choices": {"docs": True}}
 
 
+class CleanEnvTests(unittest.TestCase):
+    def test_the_variables_of_ci_and_git_do_not_reach_a_project(self) -> None:
+        # GitHub Actions sets CI and GITHUB_*, which would give api-prose-check a base. A test that needs one sets it.
+        environ = {"CI": "true", "GITHUB_EVENT_NAME": "push", "GITHUB_REF": "refs/heads/x", "GIT_DIR": "/x",
+                   "JLOG_RUN": "r", "PATH": "/bin", "HOME": "/h"}
+        self.assertEqual(clean_env(environ), {"PATH": "/bin", "HOME": "/h"})
+
+
 class ApiRuleTests(unittest.TestCase):
     """api_rule.py, as the commit gate loads it, in a project in a temporary folder."""
 
@@ -1346,7 +1378,8 @@ class ApiRuleTests(unittest.TestCase):
             "api:\n  language: typescript\n  entry: [../lib/main.ts]  # don't follow src\n",
             "api:\n  -   language: typescript\n      entry: ../lib/main.ts\n",
             "---\napi:\n  language: 'typescript'\n  entry: \"../lib/main.ts\"\n...\n",
-            "api:\n  language: typescript\n  entry: ../src/a.ts\napi:\n  language: typescript\n  entry: ../lib/main.ts\n",
+            "api:\n  language: typescript\n  entry: ../src/a.ts\n"
+            "api:\n  language: typescript\n  entry: ../lib/main.ts\n",
             "api:\r\n  language: typescript\r\n  entry: ../lib/main.ts\r\n",
         )
         for config in configs:
