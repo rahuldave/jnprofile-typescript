@@ -410,11 +410,11 @@ class StepTests(Project):
         self.assertIn("the tests of this run, run-1, wrote the report, so they do not run again", out)
         # Another run, or a change to the tree, runs the tests again.
         code, out = self.just("typescript::coverage-check", env=dict(self.env, JLOG_RUN="run-2"))
-        self.assertIn("no report of this run and this tree, so the tests run now", out)
+        self.assertIn("no report of the tests of this run and this tree, so they run now", out)
         self.just("typescript::test", env=env)
         self.write("src/app.ts", CODE + "\n")
         code, out = self.just("typescript::coverage-check", env=env)
-        self.assertIn("no report of this run and this tree, so the tests run now", out)
+        self.assertIn("no report of the tests of this run and this tree, so they run now", out)
 
     def test_a_project_with_no_code_yet_passes_test_and_coverage_check(self) -> None:
         shutil.rmtree(self.root / "src")
@@ -588,6 +588,178 @@ class TestPathsTests(Project):
         self.assertEqual(self.git("status", "--porcelain", "--untracked-files=all"), "?? src/pass.test.ts\n")
 
 
+# A function that only the integration test runs, and that test, which imports the code from src.
+ONLY_INTEGRATION = "\n/** Double A. */\nexport function twice(a: number): number {\n  return a * 2;\n}\n"
+INTEGRATION_TEST = ('import { test } from "node:test";\nimport assert from "node:assert/strict";\n'
+                    'import { twice } from "../../src/app.js";\n\ntest("twice", () => {\n  assert.equal(twice(2), 4);\n'
+                    '});\n')
+STEPS = ["fmt-check", "lint", "typecheck", "test", "integration", "coverage-check", "docstring-check", "docs-check",
+         "prose-check", "diff-check"]
+
+
+@unittest.skipUnless(TOOLS, "needs just, uv and git")
+class IntegrationTests(Project):
+    """A project with the integration tool, and a function that only an integration test runs."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.module(integration=True)
+        self.steps(STEPS)
+        self.commit()
+        self.write("src/app.ts", CODE + ONLY_INTEGRATION)
+        self.write("tests/integration/app.test.ts", INTEGRATION_TEST)
+
+    def module(self, integration: bool) -> None:
+        """Write the module file, with the integration tool when INTEGRATION is True."""
+        extra = "import? 'typescript/integration.just'\n" if integration else ""
+        (self.root / ".agents/just/typescript.just").write_text(MODULE + extra)
+
+    def steps(self, steps: list) -> None:
+        """Write .agents/stack.json with the key steps, as the installer writes it."""
+        self.write(".agents/stack.json", json.dumps({"steps": steps}) + "\n")
+
+    def test_a_line_that_only_integration_runs_passes_coverage_check_when_integration_is_a_step(self) -> None:
+        env = dict(self.env, JLOG_RUN="run-1")
+        code, out = self.just("typescript::test", env=env)
+        self.assertEqual(code, 0, out)
+        code, out = self.just("typescript::integration", env=env)
+        self.assertEqual(code, 0, out)
+        self.assertIn("✔ twice", out)
+        report = (self.root / ".jnprofile-typescript/integration/lcov.info").read_text()
+        self.assertIn("SF:src/app.ts", report)
+        code, out = self.just("typescript::coverage-check", env=env)
+        self.assertEqual(code, 0, out)
+        self.assertIn("the integration tests of this run, run-1, wrote the report, so they do not run again", out)
+        self.assertEqual(self.git("status", "--porcelain", "--untracked-files=all"),
+                         " M src/app.ts\n?? tests/integration/app.test.ts\n")
+
+    def test_without_integration_in_the_steps_the_line_fails_coverage_check(self) -> None:
+        # The answer integration=verify leaves integration out of just check, so its report does not count.
+        self.steps([step for step in STEPS if step != "integration"])
+        code, out = self.just("typescript::coverage-check")
+        self.assertEqual(code, 1, out)
+        self.assertIn("Missing lines", out)
+        self.assertNotIn("✔ twice", out)
+
+    def test_without_the_integration_tool_test_runs_the_integration_tests_and_the_line_counts(self) -> None:
+        self.module(integration=False)
+        code, out = self.just("typescript::test")
+        self.assertEqual(code, 0, out)
+        self.assertIn("✔ twice", out)
+        code, out = self.just("typescript::coverage-check")
+        self.assertEqual(code, 0, out)
+
+    def test_with_the_integration_tool_test_and_cov_leave_out_the_integration_tests(self) -> None:
+        for recipe in ("test", "cov"):
+            with self.subTest(recipe=recipe):
+                code, out = self.just(f"typescript::{recipe}")
+                self.assertEqual(code, 0, out)
+                self.assertIn("✔ add", out)
+                self.assertNotIn("✔ twice", out)
+        self.assertFalse((self.root / ".jnprofile-typescript/build/tests/integration").exists())
+
+    def test_coverage_check_runs_integration_once_and_the_step_then_does_not_run_it_again(self) -> None:
+        env = dict(self.env, JLOG_RUN="run-1")
+        code, out = self.just("typescript::coverage-check", env=env)
+        self.assertEqual(code, 0, out)
+        self.assertIn("no report of the integration tests of this run and this tree, so they run now", out)
+        self.assertIn("✔ twice", out)
+        code, out = self.just("typescript::integration", env=env)
+        self.assertEqual(code, 0, out)
+        self.assertIn("integration: it passed before in this run, run-1, on this tree, so it does not run again", out)
+        self.assertNotIn("✔ twice", out)
+        # Another run, a change to the tree, or an argument runs them again.
+        for env, change in ((dict(self.env, JLOG_RUN="run-2"), False), (env, True)):
+            if change:
+                self.write("src/app.ts", CODE + ONLY_INTEGRATION + "\n")
+            code, out = self.just("typescript::integration", env=env)
+            self.assertEqual(code, 0, out)
+            self.assertIn("✔ twice", out)
+        code, out = self.just("typescript::integration", "--test-name-pattern=twice", env=env)
+        self.assertIn("✔ twice", out)
+
+    def test_a_failed_integration_test_fails_integration_and_coverage_check(self) -> None:
+        self.write("tests/integration/app.test.ts", INTEGRATION_TEST.replace("4);", "5);"))
+        code, out = self.just("typescript::integration")
+        self.assertEqual(code, 1, out)
+        code, out = self.just("typescript::coverage-check")
+        self.assertNotEqual(code, 0, out)
+
+    def test_integration_with_no_integration_tests_passes_and_fails_with_arguments(self) -> None:
+        shutil.rmtree(self.root / "tests")
+        code, out = self.just("typescript::integration")
+        self.assertEqual(code, 0, out)
+        self.assertIn("just integration: no integration tests yet, in tests/integration", out)
+        code, out = self.just("typescript::integration", "--test-name-pattern=x")
+        self.assertEqual(code, 1, out)
+        # With no integration test, coverage-check reads the report of test only, and sub() is not run.
+        self.write("src/app.ts", CODE + UNTESTED)
+        code, out = self.just("typescript::coverage-check")
+        self.assertEqual(code, 1, out)
+        self.assertIn("Missing lines", out)
+
+    def test_an_exclude_of_the_tests_folder_does_not_hide_the_integration_tests(self) -> None:
+        self.write("tsconfig.json", json.dumps(dict(TSCONFIG, exclude=["${configDir}/tests"])))
+        code, out = self.just("typescript::integration")
+        self.assertEqual(code, 0, out)
+        self.assertIn("✔ twice", out)
+
+    def test_an_include_that_has_tests_already_needs_no_extra_config(self) -> None:
+        options = dict(TSCONFIG["compilerOptions"], rootDir="${configDir}")
+        self.write("tsconfig.json", json.dumps(dict(TSCONFIG, compilerOptions=options,
+                                                    include=["${configDir}/src", "${configDir}/tests"])))
+        for recipe in ("integration", "test"):
+            code, out = self.just(f"typescript::{recipe}")
+            self.assertEqual(code, 0, out)
+        self.assertEqual(self.git("status", "--porcelain", "--untracked-files=all"),
+                         " M src/app.ts\n M tsconfig.json\n?? tests/integration/app.test.ts\n")
+        self.assertNotIn("✔ twice", out)
+
+    def test_a_relative_include_or_exclude_still_means_the_folder_of_the_project(self) -> None:
+        options = {k: v for k, v in TSCONFIG["compilerOptions"].items() if k not in ("outDir", "rootDir")}
+        self.write("tsconfig.json", json.dumps({"compilerOptions": options, "include": ["src"],
+                                                "exclude": ["src/broken"]}))
+        self.write("src/broken/bad.ts", "export const x: number = 'no';\n")
+        for integration in (False, True):
+            with self.subTest(integration=integration):
+                self.module(integration=integration)
+                code, out = self.just("typescript::test")
+                self.assertEqual(code, 0, out)
+                code, out = self.just("typescript::test-paths", "src/app.test.ts", "tests/integration/app.test.ts")
+                self.assertEqual(code, 0, out)
+                self.assertIn("✔ twice", out)
+        code, out = self.just("typescript::integration")
+        self.assertEqual(code, 0, out)
+
+    def test_a_config_dir_path_of_the_project_means_the_top_of_the_project(self) -> None:
+        options = dict(TSCONFIG["compilerOptions"], typeRoots=["${configDir}/node_modules/@types"])
+        self.write("tsconfig.json", json.dumps(dict(TSCONFIG, compilerOptions=options)))
+        code, out = self.just("typescript::integration")
+        self.assertEqual(code, 0, out)
+        self.assertIn("✔ twice", out)
+
+    def test_an_exclude_glob_of_the_tests_folder_does_not_hide_the_integration_tests(self) -> None:
+        self.write("tsconfig.json", json.dumps(dict(TSCONFIG, exclude=["${configDir}/tests/**"])))
+        code, out = self.just("typescript::integration")
+        self.assertEqual(code, 0, out)
+        self.assertIn("✔ twice", out)
+
+    def test_test_with_arguments_fails_when_the_include_finds_no_code_and_only_integration_tests_exist(self) -> None:
+        (self.root / "src/app.test.ts").unlink()
+        self.write("tsconfig.json", json.dumps(dict(TSCONFIG, include=["${configDir}/lib"])))
+        code, out = self.just("typescript::test", "--test-name-pattern=x")
+        self.assertEqual(code, 1, out)
+        self.assertIn("tsconfig.json finds no code", out)
+        code, out = self.just("typescript::test")
+        self.assertEqual(code, 0, out)
+        self.assertIn("no code yet", out)
+
+    def test_test_paths_runs_an_integration_test_outside_the_include(self) -> None:
+        code, out = self.just("typescript::test-paths", "tests/integration/app.test.ts")
+        self.assertEqual(code, 0, out)
+        self.assertIn("✔ twice", out)
+
+
 class ProfileTests(unittest.TestCase):
     def test_the_code_and_test_globs_of_the_steps_are_those_of_the_profile(self) -> None:
         steps = load_steps()
@@ -600,6 +772,10 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(tools["typecheck"]["verify"], ["typecheck"])
         self.assertEqual(tools["test"]["verify"], ["test", "coverage-check"])
         self.assertEqual(tools["docstring"]["verify"], ["docstring-check"])
+        self.assertEqual(tools["integration"]["verify"], ["integration"])
+        self.assertEqual(tools["integration"]["recipes"], "integration.just")
+        self.assertEqual(tools["integration"]["packages"], tools["test"]["packages"])
+        self.assertEqual(tools["integration"]["lines"], tools["test"]["lines"])
         self.assertIn("c8@12", tools["test"]["packages"])
         self.assertIn(".jnprofile-typescript/", tools["test"]["lines"][".gitignore"])
         self.assertEqual(PROFILE["default_tools"], ["lint", "typecheck", "test", "docstring"])
@@ -619,13 +795,15 @@ class ProfileTests(unittest.TestCase):
             root = Path(folder)
             shutil.copytree(FOLDER, root / "typescript")
             (root / "typescript.just").write_text(MODULE.replace("import? ", "import ") +
-                                                  "import 'typescript/typecheck.just'\n")
+                                                  "import 'typescript/typecheck.just'\n"
+                                                  "import 'typescript/integration.just'\n")
             dump = json.loads(subprocess.run(["just", "--justfile", str(root / "typescript.just"), "--dump",
                                               "--dump-format", "json"], capture_output=True, text=True,
                                              check=True).stdout)
         recipes = dump["recipes"]
         found = [name for name in steps if name in recipes]
-        self.assertEqual(found, ["fmt-check", "lint", "typecheck", "test", "coverage-check", "docstring-check"])
+        self.assertEqual(found, ["fmt-check", "lint", "typecheck", "test", "coverage-check", "integration",
+                                 "docstring-check"])
         todo = list(found)
         while todo:
             recipe = recipes[todo.pop()]

@@ -4,7 +4,7 @@ title: The tools
 
 Each tool of the profile brings its packages, its recipes and its parts. The installer adds the packages to the `devDependencies` of `package.json` with npm.
 
-The default tools are `lint`, `typecheck`, `test` and `docstring`. Together they fill six steps of `just check`, which are `fmt-check`, `lint`, `typecheck`, `test`, `coverage-check` and `docstring-check`. A step is one recipe that `just check` runs. No step has a shebang line, so jlog, the program that logs each line of a recipe, logs the line of each step and its exit code.
+The default tools are `lint`, `typecheck`, `test` and `docstring`. Together they fill six steps of `just check`, which are `fmt-check`, `lint`, `typecheck`, `test`, `coverage-check` and `docstring-check`. The tool `integration` is not a default tool. It fills the step `integration`. A step is one recipe that `just check` runs. No step has a shebang line, so jlog, the program that logs each line of a recipe, logs the line of each step and its exit code.
 
 ## The base
 
@@ -47,9 +47,9 @@ The packages are `typescript@7`, `@types/node@24` and `c8@12`. c8 records which 
 | Recipe | What it does |
 |---|---|
 | `just build` | Compiles the code into `dist/`, with `tsconfig.json` |
-| `just test` | Compiles into `.jnprofile-typescript/build/`, then runs the tests there with `node --test` under c8. c8 writes the coverage as LCOV to `.jnprofile-typescript/lcov.info`. Extra arguments are options of `node --test`: `just test --test-name-pattern=add`. With no arguments, a project in which `tsconfig.json` matches no code yet passes. It is a step of `just check` |
+| `just test` | Compiles into `.jnprofile-typescript/build/`, then runs the tests there with `node --test` under c8. c8 writes the coverage as LCOV to `.jnprofile-typescript/lcov.info`. Extra arguments are options of `node --test`: `just test --test-name-pattern=add`. With no arguments, a project in which `tsconfig.json` matches no code yet passes. With the tool `integration`, the tests in `tests/integration` do not run, because `just integration` runs them. It is a step of `just check` |
 | `just coverage-check` | Fails on each changed line of code that no test runs. It is a step of `just check` |
-| `just cov` | Compiles, runs the tests, and shows the lines that they ran |
+| `just cov` | Compiles, runs the tests, and shows the lines that they ran. With the tool `integration`, the tests in `tests/integration` do not run |
 | `just typescript::test-paths FILE...` | Runs only the test files that you name, for `test-parent` of the commit gates. See [test-paths](#test-paths) |
 
 Put the code and the tests in `src/`. Name each test file `NAME.test.ts`, for example `src/app.test.ts`.
@@ -84,6 +84,7 @@ The tool adds `.jnprofile-typescript/` to `.gitignore` and to `.worktreedisposab
 - **The first commit** has no parent. Then each line of code must run in the tests, a limit of 100%.
 - **The files that do not count** are the test files, the declaration files such as `types.d.ts`, the files in `.agents`, `.claude` and `.codex`, and the files in a folder `node_modules`. The files that `.agents/generated.txt` or `.agents/coverage-exclude.txt` names do not count either. The step reads both lists from the parent commit, so a commit cannot exempt its own code with them. The config of c8, such as `exclude` in `.c8rc.json`, comes from the commit itself, so `test-review` judges each change to it.
 - **The report of the same run.** `test` saves the run ID of `just check`, `JLOG_RUN`, with the tree of the worktree. `coverage-check` reads the report only when both match. Otherwise it runs the tests first.
+- **The integration tests.** A line that only the integration tests run counts as run when two things are true. The project has the tool `integration`. The key `steps` of `.agents/stack.json` has `integration`, so `just check` runs it. Then `coverage-check` reads the reports of `test` and of `integration`, and a line counts as run when one of them runs it. When the report of `integration` is not from the same run, `coverage-check` runs the integration tests first. With the answer `integration=verify`, `just check` does not run `integration`, so its report does not count.
 
 ### test-paths
 
@@ -97,6 +98,26 @@ The tool adds `.jnprofile-typescript/` to `.gitignore` and to `.worktreedisposab
 | any other | npm, tsc or node itself failed, a test file is outside the `include` of `tsconfig.json`, or a test ended the run, as with `process.exit()` |
 
 The output has one line for each test, so a test that passes next to one that fails shows. The recipe counts the tests from the JUnit report of node, so the count does not depend on the terminal output.
+
+## integration
+
+The packages are `typescript@7`, `@types/node@24` and `c8@12`, as for the tool `test`. The tool is not a default tool. Add it with `just install integration`.
+
+| Recipe | What it does |
+|---|---|
+| `just integration` | Compiles into `.jnprofile-typescript/integration-build/`, then runs the tests of `tests/integration` there with `node --test` under c8. c8 writes the coverage as LCOV to `.jnprofile-typescript/integration/lcov.info`. Extra arguments are options of `node --test`, as for `just test`. With no test file in `tests/integration`, it passes. It is a step of `just check` |
+
+Put each integration test in `tests/integration`, with a name such as `tests/integration/app.test.ts`. A test imports the code from `src` with a relative path and the `.js` ending, for example `import { add } from "../../src/app.js"`.
+
+The default `tsconfig.json` finds only `src`. So the build of `integration` adds each test file of `tests/integration` to the files that `tsconfig.json` finds. It does so with a config file of its own, which extends `tsconfig.json`. That file is at the top of the project only while tsc runs. An `exclude` of the project does not leave these files out.
+
+`just typecheck` reads only `tsconfig.json`. To check the types of the integration tests too, add `tests/integration` to the `include`.
+
+`just check` runs `integration` before `coverage-check`. So `coverage-check` reads the report of the step `integration` of the same run, and does not run the integration tests again. When `just integration` runs after it passed in the same run, on the same tree, it says "it passed before in this run" and does not run the tests again.
+
+Without the tool, `just test` and `just cov` run the tests in `tests/integration` too, and their build adds the folder to the `include` in the same way. A file in `tests/integration` whose name does not end in `.test.ts` is code, such as a helper. So `coverage-check` and `docstring-check` check it.
+
+The tool adds the same lines to `.gitignore` and to `.worktreedisposable` as the tool `test`.
 
 ## docstring
 
