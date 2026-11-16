@@ -788,7 +788,8 @@ def api_settings(folder):
 def smalldocs(*args):
     """The command that runs ARGS with smalldocs, and with node from the nodejs-wheel package on the PATH, for
     TypeDoc."""
-    return ['uv', 'run', '--no-project', '--quiet', '--with', SMALLDOCS, '--with', 'nodejs-wheel==24.*', *args]
+    return ['uv', 'run', '--no-project', '--quiet', '--python', '>=3.11', '--with', SMALLDOCS, '--with',
+            'nodejs-wheel==24.*', *args]
 
 
 def smalldocs_env():
@@ -929,8 +930,8 @@ def api(action, option=None):
                  else f"the module comment of {page.relative_to(out / 'modules').with_suffix('').as_posix()}"
                  for page in pages]
         print(f'api-prose-check: the API pages {", ".join(names)}, of the files changed {since}', flush=True)
-        code = subprocess.run(['uv', 'run', '--no-project', '--quiet', 'python', str(PROSE_CHECKER),
-                               *map(str, pages)]).returncode
+        code = subprocess.run(['uv', 'run', '--no-project', '--quiet', '--python', '>=3.11', 'python',
+                               str(PROSE_CHECKER), *map(str, pages)]).returncode
         if code:
             print('api-prose-check: fix each hard problem in the JSDoc comment that it comes from', file=sys.stderr)
         return code

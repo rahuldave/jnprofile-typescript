@@ -824,6 +824,19 @@ class ApiTests(Project):
         # The test file is no part of the API, though it has no JSDoc.
         self.assertNotIn("app.test", out)
 
+    def test_api_check_and_api_prose_check_take_python_3_11_when_uv_would_take_an_older_one(self) -> None:
+        # smalldocs needs Python 3.11. With UV_PYTHON=3.9, as on a machine whose first Python is 3.9, uv would take
+        # 3.9 and find no smalldocs, unless the step names the version.
+        self.prose_role()
+        self.write("src/app.ts", DOCUMENTED)
+        self.commit()
+        self.write("src/app.ts", DOCUMENTED.replace("the first number", "the WRONGWORD number"))
+        env = dict(self.env, UV_PYTHON="3.9")
+        code, out = self.just("typescript::api-check", env=env)
+        self.assertEqual(code, 1, out)
+        self.assertIn("the WRONGWORD number", out)
+        self.assertNotIn("No solution found", out)
+
     def test_the_entry_is_src_index_ts_when_it_exists(self) -> None:
         self.write("src/app.ts", DOCUMENTED)
         # A file that the index does not export is no part of the API.
