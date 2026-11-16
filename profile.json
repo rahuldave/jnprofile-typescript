@@ -116,6 +116,31 @@
         ]
       }
     },
+    "integration": {
+      "packages": [
+        "typescript@7",
+        "@types/node@24",
+        "c8@12"
+      ],
+      "files": {
+        "tsconfig.json": "files/tsconfig.json"
+      },
+      "recipes": "integration.just",
+      "verify": [
+        "integration"
+      ],
+      "parts": {
+        "tsconfig.json": "files/tsconfig.json"
+      },
+      "lines": {
+        ".gitignore": [
+          ".jnprofile-typescript/"
+        ],
+        ".worktreedisposable": [
+          ".jnprofile-typescript/"
+        ]
+      }
+    },
     "docstring": {
       "packages": [],
       "recipes": "docstring.just",

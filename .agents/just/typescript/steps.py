@@ -1,10 +1,13 @@
-"""The helper of the steps of the typescript profile: test, coverage-check, docstring-check and test-paths.
+"""The helper of the steps of the typescript profile: test, integration, coverage-check, docstring-check and
+test-paths.
 
-The recipes in this folder run it with uv and Python 3.11 or later: python steps.py coverage, docs, fresh,
-begin ARG..., stamp, build and test-paths FILE.... begin, stamp and fresh tie the coverage report to the run ID JLOG_RUN of
-the root Justfile and to the worktree tree, so that coverage-check reads the report of test only in the same run.
-coverage-check runs diff-cover with uv. docstring-check runs eslint with npm exec, and node comes from the
-nodejs-wheel package, as in the recipes.
+The recipes in this folder run it with uv and Python 3.11 or later. Its commands are coverage [MODULE], docs,
+fresh NAME MODULE, ran NAME [ARG...], begin NAME [ARG...], stamp NAME, build NAME MODULE COUNT and
+test-paths FILE.... NAME is test or integration, and for build also cov. MODULE is the module file of the recipes.
+begin, stamp, fresh and ran tie each coverage report to the run ID JLOG_RUN of the root Justfile and to the worktree
+tree, so that coverage-check reads the reports of test and integration only from the same run. coverage-check runs
+diff-cover with uv. docstring-check runs eslint with npm exec, and node comes from the nodejs-wheel package, as in
+the recipes.
 
 The lists .agents/generated.txt and .agents/coverage-exclude.txt come from the parent commit, through
 git show HEAD:./PATH, so a commit cannot exempt its own code. With no parent, both lists are empty. git matches
@@ -40,8 +43,16 @@ WORK = Path('.jnprofile-typescript')
 REPORT = WORK / 'lcov.info'
 # The build of test, which tsc writes again on each run.
 BUILD = WORK / 'build'
-RUN = WORK / 'run.json'
-PENDING = WORK / 'run.pending'
+# The integration tests, which the tool integration runs with a build and a report of their own.
+INTEGRATION_FOLDER = 'tests/integration'
+INTEGRATION = WORK / 'integration' / 'lcov.info'
+INTEGRATION_BUILD = WORK / 'integration-build'
+# The report of each run that coverage-check reads, the folder of the build of the run, and the raw data of c8.
+REPORTS = {'test': REPORT, 'integration': INTEGRATION}
+BUILDS = {'test': BUILD, 'cov': BUILD, 'integration': INTEGRATION_BUILD}
+RAW = {'test': WORK / 'c8', 'integration': WORK / 'c8-integration'}
+# The record of the installer. Its key steps names the steps of just check.
+RECORD = Path('.agents/stack.json')
 # The build of test-paths, inside the project, so that node finds its package.json and its node_modules.
 PATHS_BUILD = WORK / 'test-paths'
 
@@ -244,63 +255,142 @@ def worktree_tree():
         Path(str(index) + '.lock').unlink(missing_ok=True)
 
 
-def begin(args):
-    """Save the run ID and the worktree tree before a run of the tests, in .jnprofile-typescript/run.pending.
+def run_file(name):
+    """The file that holds the run ID and the tree of the last run of NAME, test or integration, that passed."""
+    return WORK / ('run.json' if name == 'test' else f'{name}-run.json')
+
+
+def pending_file(name):
+    """The file that holds the run ID and the tree of the run of NAME that is going on."""
+    return WORK / ('run.pending' if name == 'test' else f'{name}-run.pending')
+
+
+def begin(name, args):
+    """Save the run ID and the worktree tree before a run of NAME, test or integration, in its pending file.
 
     Only a run of all the tests, with no ARGS, inside a run of just that has JLOG_RUN saves them. Any other run
-    saves nothing, so coverage-check runs the tests again. The old report goes, so a failed run leaves none. Returns
-    the exit code, always 0.
+    saves nothing, so the next step that needs the report runs the tests again. The old report goes, so a failed run
+    leaves none. Returns the exit code, always 0.
     """
-    for path in (RUN, PENDING, REPORT):
+    WORK.mkdir(parents=True, exist_ok=True)
+    for path in (run_file(name), pending_file(name), REPORTS[name]):
         path.unlink(missing_ok=True)
     # The raw coverage of c8, so that no old run adds to the report, also with clean: false in a .c8rc of the project.
-    shutil.rmtree(WORK / 'c8', ignore_errors=True)
+    shutil.rmtree(RAW[name], ignore_errors=True)
     run = os.environ.get('JLOG_RUN', '')
     tree = worktree_tree() if not args and run else None
     if tree:
-        PENDING.write_text(json.dumps({'run': run, 'tree': tree}) + '\n')
+        pending_file(name).write_text(json.dumps({'run': run, 'tree': tree}) + '\n')
     return 0
 
 
-def stamp():
-    """After the tests passed, keep the saved run as .jnprofile-typescript/run.json when the tree did not change.
+def stamp(name):
+    """After the run of NAME passed, keep the saved run as its run file when the tree did not change.
 
-    A change to a file while the tests ran means that the report may come from the old code, so the run is dropped.
+    A change to a file during the run means that the report may come from the old code, so the run is dropped.
     Returns the exit code, always 0.
     """
     try:
-        saved = json.loads(PENDING.read_text())
+        saved = json.loads(pending_file(name).read_text())
     except (OSError, ValueError):
         return 0
     finally:
-        PENDING.unlink(missing_ok=True)
+        pending_file(name).unlink(missing_ok=True)
     if isinstance(saved, dict) and saved.get('tree') and saved['tree'] == worktree_tree():
-        RUN.write_text(json.dumps(saved) + '\n')
+        # A run with no test passes and writes no report. It still counts as run, with no report.
+        saved['report'] = REPORTS[name].is_file()
+        run_file(name).write_text(json.dumps(saved) + '\n')
     else:
-        print('test: a file changed while the tests ran, so coverage-check runs them again', file=sys.stderr)
+        print(f'{name}: a file changed while the tests ran, so the next step that needs them runs them again',
+              file=sys.stderr)
     return 0
 
 
-def fresh():
-    """True when the report of the tests comes from this run of just, JLOG_RUN, and from the current worktree tree.
+def same_run(name):
+    """The run ID when the last run of NAME that passed comes from this run of just, JLOG_RUN, and from the current
+    worktree tree, and the report that it wrote is still there. Otherwise None.
 
     A person can set JLOG_RUN by hand, so the tree must match too. An old run of the same tree is a valid run.
     """
     run = os.environ.get('JLOG_RUN', '')
     try:
-        saved = json.loads(RUN.read_text())
+        saved = json.loads(run_file(name).read_text())
     except (OSError, ValueError):
         saved = None
-    if (run and isinstance(saved, dict) and saved.get('run') == run and REPORT.is_file()
+    if (run and isinstance(saved, dict) and saved.get('run') == run
+            and (not saved.get('report', True) or REPORTS[name].is_file())
             and saved.get('tree') and saved['tree'] == worktree_tree()):
-        print(f'coverage-check: the tests of this run, {run}, wrote the report, so they do not run again')
+        return run
+    return None
+
+
+def recipes_of(justfile):
+    """The names of the public recipes of JUSTFILE, as just --summary gives them, or an empty set on an error."""
+    run = subprocess.run(['just', '--justfile', str(justfile), '--summary'], capture_output=True, text=True)
+    return set(run.stdout.split()) if run.returncode == 0 else set()
+
+
+def integration_counts(module):
+    """True when the report of integration counts for coverage-check. The module MODULE must have the recipe
+    integration, and the key steps of .agents/stack.json must name it, so that just check runs it."""
+    try:
+        steps = json.loads(RECORD.read_text()).get('steps')
+    except (OSError, ValueError, AttributeError):
+        steps = None
+    return isinstance(steps, list) and 'integration' in steps and 'integration' in recipes_of(module)
+
+
+def fresh(name, module):
+    """True when the run of NAME in this run of just and on this tree wrote the report that coverage-check reads.
+
+    For integration, it is also True when its report does not count, so that coverage-check does not run it.
+    """
+    if name == 'integration' and not integration_counts(module):
         return True
-    print('coverage-check: no report of this run and this tree, so the tests run now', flush=True)
+    run = same_run(name)
+    what = 'tests' if name == 'test' else 'integration tests'
+    if run:
+        print(f'coverage-check: the {what} of this run, {run}, wrote the report, so they do not run again')
+        return True
+    print(f'coverage-check: no report of the {what} of this run and this tree, so they run now', flush=True)
     return False
 
 
-def coverage():
+def ran(name, args):
+    """True when NAME passed before in this run of just and on this tree, and ARGS is empty. So the integration
+    tests, which coverage-check can run before the step integration, run once in just check."""
+    run = None if args else same_run(name)
+    if run:
+        print(f'{name}: it passed before in this run, {run}, on this tree, so it does not run again')
+    return bool(run)
+
+
+def union(paths, root):
+    """The records of the LCOV reports PATHS, as read_lcov gives them, with one record for each file. A line counts
+    as run when one report runs it. Each record holds only the lines DA, which are all that the steps read."""
+    files = {}
+    for path in paths:
+        for name, lines in read_lcov(path.read_text(), root):
+            if name is None:
+                continue
+            hits = files.setdefault(name, {})
+            for line in lines:
+                if line.startswith('DA:'):
+                    try:
+                        number, count = (int(part) for part in line[3:].split(',')[:2])
+                    except ValueError:
+                        continue
+                    hits[number] = max(hits.get(number, 0), count)
+    return [(name, [f'SF:{name}', *(f'DA:{number},{count}' for number, count in sorted(hits.items())),
+                    'end_of_record'])
+            for name, hits in sorted(files.items())]
+
+
+def coverage(module=None):
     """Fail on each changed line of code that the tests do not run, as diff-cover against HEAD finds it.
+
+    The report is the one of test. When integration counts, as integration_counts of MODULE says, it is the union of
+    the reports of test and integration, so a line that only the integration tests run counts as run.
 
     The files of generated.txt and coverage-exclude.txt of the parent commit do not count, and nor do the test files.
     A line after /* c8 ignore next */ counts as run. On the first commit, every line of code must run, a limit of
@@ -319,10 +409,11 @@ def coverage():
     if not changed:
         print('coverage-check: no changed code')
         return 0
-    records = read_lcov(REPORT.read_text(), root) if REPORT.is_file() else []
+    names = [REPORT] + ([INTEGRATION] if module and integration_counts(module) else [])
+    records = union([path for path in names if path.is_file()], root)
     if not records:
-        print(f'coverage-check: there is no coverage report {REPORT}, so write tests and run just test',
-              file=sys.stderr)
+        print(f'coverage-check: there is no coverage report {" or ".join(map(str, names))}, so write tests and run '
+              'just test', file=sys.stderr)
         return 1
     kept = {path for path, _ in records if path in wanted}
     code = 0
@@ -406,26 +497,55 @@ def docs():
     return 0
 
 
-def project_options():
-    """The compiler options of the project, as tsc --showConfig resolves them from tsconfig.json and its extends.
+def project_config():
+    """The config of the project, as tsc --showConfig resolves it from tsconfig.json and its extends: the compiler
+    options, the files that it finds, and its include and exclude, with absolute paths.
 
     An empty dict when tsc cannot read the config, so that the build itself shows the error.
     """
     run = subprocess.run([*NODE, 'npm', 'exec', '--', 'tsc', '--showConfig'], capture_output=True, text=True)
     try:
-        options = json.loads(run.stdout).get('compilerOptions', {})
-    except (ValueError, AttributeError):
+        config = json.loads(run.stdout)
+    except ValueError:
         return {}
+    return config if isinstance(config, dict) else {}
+
+
+def options_of(config):
+    """The compiler options of CONFIG, a dict that project_config gives."""
+    options = config.get('compilerOptions', {})
     return options if isinstance(options, dict) else {}
 
 
-def compile_into(build, options):
+def integration_tests():
+    """The test files in the folder of the integration tests, tests/integration, that git tracks or does not ignore."""
+    return sorted(path for path in listed(TESTS) if path.startswith(INTEGRATION_FOLDER + '/') and Path(path).is_file())
+
+
+def leaf_config(build, config, needed):
+    """The text of a tsconfig file that extends tsconfig.json and adds the integration tests of NEEDED to the files
+    that CONFIG finds, or None when CONFIG already finds each of them or NEEDED has no integration test.
+
+    The default tsconfig.json finds only src, and the integration tests are in tests/integration. tsc applies no
+    exclude to the list files, so an exclude of the project does not hide them either. The file goes at the top of
+    the project, next to tsconfig.json, so that each relative path and each ${configDir} of the config means what it
+    means in tsconfig.json.
+    """
+    found = [Path(path).as_posix().removeprefix('./') for path in config.get('files', []) if isinstance(path, str)]
+    extra = [path for path in needed if path.startswith(INTEGRATION_FOLDER + '/') and path not in set(found)]
+    if not extra:
+        return None
+    return json.dumps({'extends': './tsconfig.json', 'files': [f'./{path}' for path in found + extra]}, indent=2) + '\n'
+
+
+def compile_into(build, config, needed=()):
     """Compile the project with tsc into the folder BUILD, removed first, and return the finished process.
 
     The flags take the place of the settings of the project that would write elsewhere or write no JavaScript:
     the output, its root, which is the top of the project so that emitted() finds each file, the build info, the
     declarations, and the source maps that c8 needs. tsc writes the output also when a file has an error, so a file
-    that does not build cannot hide another file.
+    that does not build cannot hide another file. When an integration test of NEEDED is outside the files that
+    tsconfig.json finds, tsc reads a config file of leaf_config, which is there only while tsc runs.
     """
     shutil.rmtree(build, ignore_errors=True)
     flags = ['--pretty', 'false', '--outDir', str(build), '--rootDir', '.', '--noEmit', 'false',
@@ -433,9 +553,21 @@ def compile_into(build, options):
              '--tsBuildInfoFile', str(build / 'tsconfig.tsbuildinfo'), '--sourceMap', 'true',
              '--inlineSourceMap', 'false']
     # tsc refuses a declarationDir with no declarations, so the flag goes only to a project that writes them.
+    options = options_of(config)
     if options.get('declaration') or options.get('composite'):
         flags += ['--declarationDir', str(build / 'types')]
-    return subprocess.run([*NODE, 'npm', 'exec', '--', 'tsc', *flags], capture_output=True, text=True)
+    leaf = leaf_config(build, config, needed)
+    if not leaf:
+        return subprocess.run([*NODE, 'npm', 'exec', '--', 'tsc', *flags], capture_output=True, text=True)
+    handle, name = tempfile.mkstemp(dir='.', prefix='.jnprofile-typescript-', suffix='.tsconfig.json')
+    path = Path(name)
+    try:
+        with os.fdopen(handle, 'w') as out:
+            out.write(leaf)
+        return subprocess.run([*NODE, 'npm', 'exec', '--', 'tsc', '--project', str(path), *flags],
+                              capture_output=True, text=True)
+    finally:
+        path.unlink(missing_ok=True)
 
 
 def emitted(path, build, options):
@@ -450,24 +582,46 @@ def emitted(path, build, options):
     return build / path
 
 
-def build():
-    """Compile the project into the build of test, for test and cov, and return the exit code.
+def build(name, module, given):
+    """Compile the project into the build of NAME, test, cov or integration, and return the exit code.
 
-    It fails on each test file of the project that tsc writes no output for, because no test of it would run. Such
-    a file is outside the include of tsconfig.json. It exits with 3 when the include finds no file at all, error
-    TS18003: a project with no code yet.
+    With the tool integration, which the recipe integration of the module MODULE shows, test and cov leave out the
+    integration tests in tests/integration, and integration runs only them. Without it, test and cov run them too.
+    It fails on each test file of the run that tsc writes no output for, because no test of it would run. Such a
+    file is outside the include of tsconfig.json. With nothing to run, it exits with 3 when GIVEN, the count of the
+    arguments of the recipe, is 0, and with 1 otherwise: tsconfig.json finds no file at all, error TS18003, or there
+    is no integration test.
     """
-    options = project_options()
-    run = compile_into(BUILD, options)
-    out = run.stdout + run.stderr
+    folder = BUILDS[name]
     tests = sorted(path for path in listed(TESTS) if not path.startswith(TOOL_FOLDERS)
                    and 'node_modules' not in path.split('/')[:-1] and Path(path).is_file())
-    if run.returncode and 'error TS18003' in out and not tests:
-        return 3
+    inside = integration_tests()
+    if name == 'integration':
+        if not inside:
+            print(f'just integration: no integration tests yet, in {INTEGRATION_FOLDER}')
+            return 3 if given == '0' else 1
+        needed = inside
+    elif 'integration' in recipes_of(module):
+        needed = [path for path in tests if path not in inside]
+    else:
+        needed = tests
+    config = project_config()
+    options = options_of(config)
+    run = compile_into(folder, config, needed)
+    out = run.stdout + run.stderr
+    if run.returncode and 'error TS18003' in out and not needed:
+        if given == '0':
+            print(f'just {name}: no code yet')
+            return 3
+        print(f'just {name}: tsconfig.json finds no code')
+        return 1
     if run.returncode and 'error TS18003' not in out:
         print(out, end='')
         return run.returncode
-    absent = [path for path in tests if not emitted(path, BUILD, options).is_file()]
+    if name != 'integration' and needed != tests:
+        # The integration tool runs these, so node --test finds no output of them in the build of test.
+        shutil.rmtree(folder / INTEGRATION_FOLDER, ignore_errors=True)
+    absent = [path for path in needed if not emitted(path, folder, options).is_file()]
     for path in absent:
         print(f'{path}: tsc writes no output for this test file, so its tests never run. Name it in the include of '
               'tsconfig.json', flush=True)
@@ -511,10 +665,11 @@ def test_paths(files):
             print(run.stdout + run.stderr, end='')
             print('just test-paths: npm cannot install the dependencies of the project')
             return 2
-    options = project_options()
-    run = compile_into(PATHS_BUILD, options)
-    print(run.stdout + run.stderr, end='')
     named = [Path(path).as_posix().removeprefix('./') for path in files]
+    config = project_config()
+    options = options_of(config)
+    run = compile_into(PATHS_BUILD, config, named)
+    print(run.stdout + run.stderr, end='')
     if run.returncode and any(line.startswith(f'{path}(') for line in run.stdout.splitlines() for path in named):
         print('just test-paths: a test file does not build')
         return 1
@@ -541,24 +696,25 @@ def test_paths(files):
 
 
 def main(argv):
-    """Run the command of ARGV, coverage, docs, fresh, begin ARG..., stamp or test-paths FILE..., and return its exit
-    code."""
-    if argv == ['coverage']:
-        return coverage()
+    """Run the command of ARGV, as the docstring of the module lists them, and return its exit code."""
+    if argv[:1] == ['coverage'] and len(argv) <= 2:
+        return coverage(argv[1] if len(argv) == 2 else None)
     if argv == ['docs']:
         return docs()
-    if argv == ['fresh']:
-        return 0 if fresh() else 1
-    if argv[:1] == ['begin']:
-        return begin(argv[1:])
-    if argv == ['stamp']:
-        return stamp()
+    if argv[:1] == ['fresh'] and len(argv) == 3 and argv[1] in REPORTS:
+        return 0 if fresh(argv[1], argv[2]) else 1
+    if argv[:1] == ['ran'] and len(argv) >= 2 and argv[1] in REPORTS:
+        return 0 if ran(argv[1], argv[2:]) else 1
+    if argv[:1] == ['begin'] and len(argv) >= 2 and argv[1] in REPORTS:
+        return begin(argv[1], argv[2:])
+    if argv[:1] == ['stamp'] and len(argv) == 2 and argv[1] in REPORTS:
+        return stamp(argv[1])
     if argv[:1] == ['test-paths']:
         return test_paths(argv[1:])
-    if argv == ['build']:
-        return build()
-    print('usage: steps.py coverage | docs | fresh | begin [ARG...] | stamp | build | test-paths [FILE...]',
-          file=sys.stderr)
+    if argv[:1] == ['build'] and len(argv) == 4 and argv[1] in BUILDS:
+        return build(*argv[1:])
+    print('usage: steps.py coverage [MODULE] | docs | fresh NAME MODULE | ran NAME [ARG...] | begin NAME [ARG...] | '
+          'stamp NAME | build NAME MODULE COUNT | test-paths [FILE...]', file=sys.stderr)
     return 2
 
 
