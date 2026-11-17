@@ -1,5 +1,5 @@
-# The recipes of the profile's own repository. The five recipes lint, test, prose-check, docs-check and check are the
-# same in each language profile, and CI runs just check.
+# The recipes of the profile's own repository. The recipes lint, test, prose-check, docs-check, release-check, release
+# and check are the same in each language profile, and CI runs just check.
 
 # The documentation site, from docs/, with smalldocs, at the pin of jnterfaces.
 smalldocs := "uvx --quiet smalldocs@0.5.12"
@@ -22,8 +22,21 @@ prose-check:
 docs-check:
   {{smalldocs}} check docs
 
-# Run every check of the repository: lint, test, prose-check and docs-check, in that order
-check: lint test prose-check docs-check
+# Run every check of the repository: release-check, lint, test, prose-check and docs-check, in that order
+check: release-check lint test prose-check docs-check
+
+# The release tags. scripts/release_tag.py is a copy of .agents/skills/gpa/scripts/release_tag.py of
+# agent_gest_git_skills at the commit 799a44b. The job release of verify.yml runs just release on each push to main.
+release_tag := "uv run --no-project --quiet --no-python-downloads --python '>=3.9' python scripts/release_tag.py"
+
+# Tag HEAD with the next release vX.Y.Z by semver, push the tag and check it. Takes --dry-run first
+[positional-arguments]
+release *args:
+  @{{release_tag}} "$@"
+
+# Print the next tag, or fail on a git error. It needs no network and no remote
+release-check:
+  {{release_tag}} --check
 
 docs:
   {{smalldocs}} preview docs
