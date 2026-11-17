@@ -1,5 +1,5 @@
 """The helper of the steps of the typescript profile: test, integration, coverage-check, docstring-check,
-api-check, api-prose-check and test-paths.
+api-check, api-prose-check and test-paths, and of version.
 
 The recipes in this folder run it with uv and Python 3.11 or later. Its commands are coverage [MODULE], docs,
 fresh NAME MODULE, ran NAME [ARG...], begin NAME [ARG...], stamp NAME, build NAME MODULE COUNT,
@@ -9,7 +9,8 @@ fresh and ran tie each coverage report, or the pass of api-prose-check, to the r
 and to the worktree tree, so that coverage-check reads the reports of test and integration only from the same run,
 and a check that two steps need runs once. coverage-check runs diff-cover with uv. docstring-check runs eslint with
 npm exec, and node comes from the nodejs-wheel package, as in the recipes. api-check runs smalldocs with uv, and
-pages runs in its environment.
+pages runs in its environment. The command version prints the version
+of package.json, for the release tag.
 
 The lists .agents/generated.txt and .agents/coverage-exclude.txt come from the parent commit, through
 git show HEAD:./PATH, so a commit cannot exempt its own code. With no parent, both lists are empty. git matches
@@ -38,6 +39,12 @@ ESLINT = ('eslint@10.14.0', 'eslint-plugin-jsdoc@65.4.0', '@typescript-eslint/pa
           '@typescript-eslint/utils@8.72.1', 'typescript@6.0.3')
 ESLINT_CONFIG = Path(__file__).resolve().parent / 'docstring.eslint.mjs'
 GENERATED = '.agents/generated.txt'
+# A version for the command version: the grammar of semver.org, MAJOR.MINOR.PATCH with an optional -PRERELEASE and an
+# optional +BUILD. A number has no leading zero, and there is no v in front and no space. fullmatch and re.ASCII
+# match the whole string, with ASCII digits only.
+SEMVER = re.compile(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)'
+                    r'(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?'
+                    r'(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?', re.ASCII)
 COVERAGE_EXCLUDE = '.agents/coverage-exclude.txt'
 # The code files and the test files, as the keys code and tests of profile.json name them.
 CODE = ('**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts')
@@ -1113,6 +1120,44 @@ def base_option(args):
     return ref
 
 
+def version(manifest=Path('package.json')):
+    """Print the version of the project from MANIFEST, for the release tag, and return the exit code.
+
+    The version is the key version of the object in package.json, as it is, such as 1.2.0-beta.1. No manifest, or
+    no key version in it, prints nothing and gives 0. A link to no file is a manifest that cannot be read. A manifest
+    that cannot be read or parsed, that is not a JSON object, or whose version is not a strict semver version, as
+    SEMVER says, gives 2 with a message. So the release never makes a tag such as vv1.2.3. It reads the file with
+    the json module only, so it runs no node and writes nothing.
+    """
+    try:
+        text = manifest.read_text(encoding='utf-8-sig')
+    except FileNotFoundError as error:
+        if not manifest.is_symlink():
+            return 0
+        print(f'version: cannot read {manifest}: {error}', file=sys.stderr)
+        return 2
+    except (OSError, UnicodeDecodeError) as error:
+        print(f'version: cannot read {manifest}: {error}', file=sys.stderr)
+        return 2
+    try:
+        data = json.loads(text)
+    except (ValueError, RecursionError) as error:
+        print(f'version: cannot read {manifest}: {error}', file=sys.stderr)
+        return 2
+    if not isinstance(data, dict):
+        print(f'version: {manifest} is not a JSON object', file=sys.stderr)
+        return 2
+    found = data.get('version')
+    if found is None:
+        return 0
+    if not isinstance(found, str) or not SEMVER.fullmatch(found):
+        print(f'version: the version in {manifest} is not a semver version such as 1.2.3 or 1.2.0-beta.1, with no v '
+              f'and no space: {ascii(found)}', file=sys.stderr)
+        return 2
+    print(found)
+    return 0
+
+
 def main(argv):
     """Run the command of ARGV, as the docstring of the module lists them, and return its exit code."""
     if argv[:1] == ['coverage'] and len(argv) <= 2:
@@ -1141,9 +1186,11 @@ def main(argv):
     if argv[:1] == ['config'] and len(argv) == 3:
         own = typescript_config(argv[1], argv[2], False)
         return own if isinstance(own, int) else 0
+    if argv == ['version']:
+        return version()
     print('usage: steps.py coverage [MODULE] | docs | fresh NAME MODULE | ran NAME [ARG...] | begin NAME [ARG...] | '
           'stamp NAME | build NAME MODULE COUNT | test-paths [FILE...] | api check | api prose [--base REF] | '
-          'pages DOCS OUT [FILE...] | config DOCS OUT', file=sys.stderr)
+          'pages DOCS OUT [FILE...] | config DOCS OUT | version', file=sys.stderr)
     return 2
 
 

@@ -16,7 +16,7 @@ them out.
 
 | Tool | Packages | Recipes | Parts in config files | Lines in `.gitignore` and `.worktreedisposable` |
 |---|---|---|---|---|
-| none, always there | none | `setup` | none | `node_modules/`, `*.tsbuildinfo`; also `dist/` and `.local/` in `.gitignore` |
+| none, always there | none | `setup`, `version` | none | `node_modules/`, `*.tsbuildinfo`; also `dist/` and `.local/` in `.gitignore` |
 | `lint` | `@biomejs/biome@2` | `fmt`, `fmt-check`, `lint` | `biome.json` | none |
 | `typecheck` | `typescript@7`, `@types/node@24` | `typecheck` | `tsconfig.json` | none |
 | `test` | `typescript@7`, `@types/node@24`, `c8@12` | `build`, `test`, `coverage-check`, `cov`, `test-paths` | `tsconfig.json` | `.jnprofile-typescript/` |

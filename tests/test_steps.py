@@ -5,6 +5,7 @@ project needs no install of its own. Each project links them in.
 """
 
 import ast
+import contextlib
 import io
 import json
 import os
@@ -1500,6 +1501,133 @@ class ApiRuleTests(unittest.TestCase):
         package = json.loads((REPO / "skill-package.json").read_text())
         self.assertIn(".agents/just/typescript", package["install_extras"]["files"])
         self.assertTrue(RULE.is_file())
+
+
+class VersionTests(unittest.TestCase):
+    """The recipe typescript::version, which prints the version of package.json for the release tag."""
+
+    def run_on(self, text=None, raw=None, folder=False):
+        """The exit code, the output and the errors of version on a package.json with TEXT, or the bytes RAW, or
+        that is a folder. With none of them, there is no package.json."""
+        steps = load_steps()
+        with tempfile.TemporaryDirectory() as temp:
+            manifest = Path(temp) / "package.json"
+            if folder:
+                manifest.mkdir()
+            elif raw is not None:
+                manifest.write_bytes(raw)
+            elif text is not None:
+                manifest.write_text(text)
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = steps.version(manifest)
+            made = text is not None or raw is not None or folder
+            self.assertEqual(sorted(p.name for p in Path(temp).iterdir()), ["package.json"] if made else [],
+                             "version wrote a file")
+            return code, out.getvalue(), err.getvalue()
+
+    def test_a_version_prints_on_one_line(self) -> None:
+        self.assertEqual(self.run_on('{"name": "a", "version": "1.2.3"}'), (0, "1.2.3\n", ""))
+
+    def test_a_prerelease_prints_as_it_is(self) -> None:
+        for version in ("1.2.0-beta.1", "2.0.0-rc.1+build.5", "0.0.0"):
+            self.assertEqual(self.run_on(json.dumps({"version": version})), (0, version + "\n", ""), version)
+
+    def test_a_version_that_is_not_strict_semver_exits_2(self) -> None:
+        # A release makes the tag v + VERSION, so v1.2.3 would give vv1.2.3, and 1.0 a tag that npm does not match.
+        for version in ("v1.2.3", "1.0", "1", " 1.0.0 ", "1.0.0 ", "1.2.3\n", "01.2.3", "1.02.3", "1.2.03",
+                        "1.2.3-01", "1.2.3-", "1.2.3+", "1.2.3-a..b", "1.2.3+a..b", "1.2.3-\u03b2", "\u0661.2.3",
+                        "1.2.3.4", "=1.2.3", "^1.2.3", "1.2.x", "latest"):
+            code, out, err = self.run_on(json.dumps({"version": version}))
+            self.assertEqual((code, out), (2, ""), version)
+            self.assertTrue(err.startswith("version: the version in"), err)
+
+    def test_a_valid_prerelease_and_build_print_as_they_are(self) -> None:
+        for version in ("1.2.3-alpha", "1.2.3-0.3.7", "1.2.3-x.7.z.92", "1.2.3-x-y-z.--", "1.2.3+20130313144700",
+                        "1.2.3-beta+exp.sha.5114f85", "1.2.3+21AF26D3----117B344092BD", "10.20.30", "1.2.3-0a",
+                        "1.2.3-rc.1+build.01"):
+            self.assertEqual(self.run_on(json.dumps({"version": version})), (0, version + "\n", ""), version)
+
+    def test_a_byte_order_mark_is_no_part_of_the_file(self) -> None:
+        self.assertEqual(self.run_on(raw=b'\xef\xbb\xbf{"version": "1.0.0"}'), (0, "1.0.0\n", ""))
+
+    def test_no_manifest_or_no_version_prints_nothing(self) -> None:
+        self.assertEqual(self.run_on(), (0, "", ""))
+        self.assertEqual(self.run_on('{"name": "a"}'), (0, "", ""))
+        self.assertEqual(self.run_on('{"name": "a", "version": null}'), (0, "", ""))
+        # A version in another object, such as that of a dependency, is not the version of the project.
+        self.assertEqual(self.run_on('{"dependencies": {"version": "1.0.0"}}'), (0, "", ""))
+
+    def test_an_unreadable_file_exits_2_with_a_message(self) -> None:
+        cases = [dict(raw=b'{"version": '), dict(raw=b"\xff\xfe"), dict(raw=b""), dict(raw=b"[1]"),
+                 dict(raw=b'"1.0.0"'), dict(raw=b'{"version": 5}'), dict(raw=b'{"version": ""}'),
+                 dict(raw=b'{"version": "1.0.0\\n2.0.0"}'), dict(raw=b'{"version": " 1.0.0"}'),
+                 dict(raw=b"[" * 100000 + b"]" * 100000), dict(folder=True),
+                 dict(raw='{"version": "1.0.0-\u03b2eta"}'.encode()), dict(raw='{"version": "1.0.0\u00a0"}'.encode()),
+                 dict(raw=b'{"version": "1.0.0\\u0007"}'), dict(raw=b'{"version": "\\ud800"}')]
+        for case in cases:
+            code, out, err = self.run_on(**case)
+            self.assertEqual((code, out), (2, ""), case if "folder" in case else case["raw"][:40])
+            self.assertTrue(err.startswith("version: "), err)
+
+    def test_a_link_to_no_file_exits_2(self) -> None:
+        # A release would read a broken link as no version, so the recipe says that it cannot read the file.
+        steps = load_steps()
+        with tempfile.TemporaryDirectory() as temp:
+            manifest = Path(temp) / "package.json"
+            manifest.symlink_to(Path(temp) / "nowhere.json")
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = steps.version(manifest)
+        self.assertEqual((code, out.getvalue()), (2, ""))
+        self.assertTrue(err.getvalue().startswith("version: cannot read"), err.getvalue())
+
+    def test_a_link_to_a_file_prints_its_version(self) -> None:
+        steps = load_steps()
+        with tempfile.TemporaryDirectory() as temp:
+            (Path(temp) / "real.json").write_text('{"version": "4.0.0"}')
+            (Path(temp) / "package.json").symlink_to(Path(temp) / "real.json")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(steps.version(Path(temp) / "package.json"), 0)
+        self.assertEqual(out.getvalue(), "4.0.0\n")
+
+    def test_the_recipe_has_one_line_of_comment_for_just_list(self) -> None:
+        # just --list shows only the last line of the comment above a recipe, so the whole comment is one line.
+        lines = (FOLDER / "base.just").read_text().splitlines()
+        at = lines.index("version:")
+        self.assertTrue(lines[at - 1].startswith("# Print the version of package.json"), lines[at - 1])
+        self.assertFalse(lines[at - 2].startswith("#"), lines[at - 2])
+
+    def test_the_recipe_prints_the_version_through_just(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            (Path(temp) / "package.json").write_text('{"version": "3.1.4-alpha.2"}\n')
+            done = subprocess.run(["just", "--justfile", str(FOLDER / "base.just"), "--working-directory", temp,
+                                   "version"], capture_output=True, text=True, env=clean_env(os.environ), check=False)
+            self.assertEqual((done.returncode, done.stdout), (0, "3.1.4-alpha.2\n"), done.stderr)
+            self.assertEqual(sorted(p.name for p in Path(temp).iterdir()), ["package.json"])
+            (Path(temp) / "package.json").write_text("{")
+            done = subprocess.run(["just", "--justfile", str(FOLDER / "base.just"), "--working-directory", temp,
+                                   "version"], capture_output=True, text=True, env=clean_env(os.environ), check=False)
+            self.assertEqual((done.returncode, done.stdout), (2, ""), done.stderr)
+            self.assertIn("version: cannot read package.json", done.stderr)
+
+    def test_the_recipe_reads_with_python_3_11_or_later_and_no_node(self) -> None:
+        text = (FOLDER / "base.just").read_text()
+        recipe = text.split("\nversion:\n", 1)[1].split("\n\n", 1)[0]
+        self.assertEqual(recipe.strip(), "{{python_run}} {{ts_steps}} version")
+        self.assertIn("python_run := \"uv run --no-project --quiet --python '>=3.11' python\"", text)
+        # The function reads with json only: it starts no process.
+        steps = load_steps()
+        with unittest.mock.patch.object(subprocess, "run", side_effect=AssertionError("a process")), \
+                tempfile.TemporaryDirectory() as temp:
+            (Path(temp) / "package.json").write_text('{"version": "1.0.0"}')
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(steps.version(Path(temp) / "package.json"), 0)
+
+    def test_version_is_no_step_of_just_check(self) -> None:
+        for tool in PROFILE["tools"].values():
+            self.assertNotIn("version", tool.get("verify", []))
 
 
 if __name__ == "__main__":
