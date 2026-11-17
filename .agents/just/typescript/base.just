@@ -14,6 +14,10 @@ ts_steps := quote(source_directory() / "steps.py")
 setup:
     {{npm}} install
 
+# Print the version of package.json, such as 1.2.0-beta.1, for the release tag. It prints nothing when there is none
+version:
+    {{python_run}} {{ts_steps}} version
+
 # The script of test, cov and integration: tsc, then node --test under c8. test and integration write their LCOV
 # reports for coverage-check, and cov shows the lines. test and integration are steps of just check, and jlog logs
 # only the lines of a recipe with no shebang line, so each runs this script in one line, through just. module_file()

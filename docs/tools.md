@@ -15,10 +15,21 @@ Every project of the profile gets the base, even a project with no tool.
 | Recipe | What it does |
 |---|---|
 | `just setup` | Installs every dependency into `node_modules`, as `package-lock.json` says |
+| `just typescript::version` | Prints the version of `package.json`, for the release tag. See [version](#version) |
 
 The recipes run node and npm with `uvx --from 'nodejs-wheel==24.*'`. The cache of npm is in `.local/npm-cache`. The installer checks that uv can run node 24 before it writes anything. The helper script of the steps, `steps.py`, runs with `uv run --no-project` and Python 3.11 or later.
 
 The base adds `node_modules/`, `dist/`, `.local/` and `*.tsbuildinfo` to `.gitignore`. It adds `node_modules/` and `*.tsbuildinfo` to `.worktreedisposable`. That file lists the ignored files that a command can make again. `just worktrees-prune` keeps a worktree that has ignored files, but it does not count these files.
+
+### version
+
+The release of agent_gest_git_skills makes a tag from the version of the project. The tag must agree with the manifest, which is `package.json`. So each language profile has a recipe `version`. It is a recipe of the base, and not a step of `just check`.
+
+- **A version.** The recipe prints the value of the key `version` of `package.json` on one line, and exits with 0. It prints a prerelease as it is, for example `1.2.0-beta.1`.
+- **No version.** When the project has no `package.json`, or the file has no key `version`, the recipe prints nothing and exits with 0.
+- **A file that it cannot read.** The recipe exits with 2 and writes a message that starts with `version:`. A file that is not JSON, or not a JSON object, is such a file. So is a version that is not a string, or that has a character other than a printable ASCII character, such as a space. A link to no file is such a file too.
+
+The recipe reads the file with the `json` module of Python, through `steps.py`. It runs with Python 3.11 or later, as the other recipes run `steps.py`. It needs no node, and it writes no file.
 
 ## lint
 
