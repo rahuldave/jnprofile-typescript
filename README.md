@@ -44,7 +44,7 @@ The machine needs `just` and `uv`. `uv` runs node and npm from the
 
 ## The checks of this repository
 
-The Justfile of this repository has the same five checks as the other language profiles:
+The Justfile of this repository has the same checks as the other language profiles:
 
 | Recipe | What it does |
 |---|---|
@@ -52,11 +52,15 @@ The Justfile of this repository has the same five checks as the other language p
 | `just test` | Runs all the tests, and the live lab too, with `scripts/run_tests.py`. In CI, a test that skips fails the run, so a missing program cannot pass. |
 | `just prose-check` | Runs the checker of nossaifd on the Markdown pages. A hard note fails it. The variable `NOSSAIFD_CHECK` names the checker. The default is `~/Projects/nossaifd/check.py`. |
 | `just docs-check` | Runs `smalldocs check docs` with smalldocs 0.5.12. |
-| `just check` | Runs `lint`, `test`, `prose-check` and `docs-check`, in that order. |
+| `just release-check` | Prints the next tag. It needs no network. This repository has no manifest with a version, so the tag comes from the commits since the last tag. |
+| `just release` | Tags HEAD with the next release `vX.Y.Z`, pushes the tag and checks it. `just release --dry-run` prints the tag and changes nothing. |
+| `just check` | Runs `release-check`, `lint`, `test`, `prose-check` and `docs-check`, in that order. |
 
 The live lab installs the profile into a new project, and it needs uv, git, jlog and node. It finds the installer and the other packages in the folder that `SKILL_PACKAGES_DIR` names, or else in `~/Projects`. `JNTERFACES_INSTALLER` can name the installer.
 
 The CI runs `just check` on each push and on each pull request. It installs node and jlog v0.1.1. It clones jnterfaces and nossaifd at fixed commits. The live lab installs the profile without the tasker role, so it needs no other package. No agent and no model runs in CI.
+
+On each push to `main`, the job `release` of `.github/workflows/verify.yml` runs `just release` after the job `verify` passes. Only that job can write to the repository, to push the tag. So nobody tags by hand. The script is `scripts/release_tag.py`, a copy of the script of the gpa skill of agent_gest_git_skills. The section "Release tags" of its `docs/integration_delivery_workflow.md` gives the rules.
 
 ## License
 
