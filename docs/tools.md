@@ -26,8 +26,9 @@ The base adds `node_modules/`, `dist/`, `.local/` and `*.tsbuildinfo` to `.gitig
 The release of agent_gest_git_skills makes a tag from the version of the project. The tag must agree with the manifest, which is `package.json`. So each language profile has a recipe `version`. It is a recipe of the base, and not a step of `just check`.
 
 - **A version.** The recipe prints the value of the key `version` of `package.json` on one line, and exits with 0. It prints a prerelease as it is, for example `1.2.0-beta.1`.
+- **A version that is not semver.** The recipe exits with 2 and writes a message that starts with `version:`. The version must be `MAJOR.MINOR.PATCH`, with an optional `-PRERELEASE` and an optional `+BUILD`, as semver.org defines it. So `v1.2.3`, `1.0`, `01.2.3` and a version with a space fail. This rule is the same in each language profile, so `just release` never makes a bad tag, such as `vv1.2.3`.
 - **No version.** When the project has no `package.json`, or the file has no key `version`, the recipe prints nothing and exits with 0.
-- **A file that it cannot read.** The recipe exits with 2 and writes a message that starts with `version:`. A file that is not JSON, or not a JSON object, is such a file. So is a version that is not a string, or that has a character other than a printable ASCII character, such as a space. A link to no file is such a file too.
+- **A file that it cannot read.** The recipe exits with 2 and writes a message that starts with `version:`. A file that is not JSON, or not a JSON object, is such a file. A link to no file is such a file too.
 
 The recipe reads the file with the `json` module of Python, through `steps.py`. It runs with Python 3.11 or later, as the other recipes run `steps.py`. It needs no node, and it writes no file.
 

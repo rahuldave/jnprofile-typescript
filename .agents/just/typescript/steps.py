@@ -39,6 +39,12 @@ ESLINT = ('eslint@10.14.0', 'eslint-plugin-jsdoc@65.4.0', '@typescript-eslint/pa
           '@typescript-eslint/utils@8.72.1', 'typescript@6.0.3')
 ESLINT_CONFIG = Path(__file__).resolve().parent / 'docstring.eslint.mjs'
 GENERATED = '.agents/generated.txt'
+# A version for the command version: the grammar of semver.org, MAJOR.MINOR.PATCH with an optional -PRERELEASE and an
+# optional +BUILD. A number has no leading zero, and there is no v in front and no space. fullmatch and re.ASCII
+# match the whole string, with ASCII digits only.
+SEMVER = re.compile(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)'
+                    r'(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?'
+                    r'(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?', re.ASCII)
 COVERAGE_EXCLUDE = '.agents/coverage-exclude.txt'
 # The code files and the test files, as the keys code and tests of profile.json name them.
 CODE = ('**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts')
@@ -1119,9 +1125,9 @@ def version(manifest=Path('package.json')):
 
     The version is the key version of the object in package.json, as it is, such as 1.2.0-beta.1. No manifest, or
     no key version in it, prints nothing and gives 0. A link to no file is a manifest that cannot be read. A manifest
-    that cannot be read or parsed, that is not a JSON object, or whose version is not a string of printable ASCII
-    characters with no space, gives 2 with a message. It reads the file with the json module only, so it runs no node
-    and writes nothing.
+    that cannot be read or parsed, that is not a JSON object, or whose version is not a strict semver version, as
+    SEMVER says, gives 2 with a message. So the release never makes a tag such as vv1.2.3. It reads the file with
+    the json module only, so it runs no node and writes nothing.
     """
     try:
         text = manifest.read_text(encoding='utf-8-sig')
@@ -1144,10 +1150,9 @@ def version(manifest=Path('package.json')):
     found = data.get('version')
     if found is None:
         return 0
-    # The characters of a semver version are printable ASCII, with no space.
-    if not isinstance(found, str) or not found or any(not '!' <= char <= '~' for char in found):
-        print(f'version: the version in {manifest} is not a string of printable ASCII characters with no space: '
-              f'{ascii(found)}', file=sys.stderr)
+    if not isinstance(found, str) or not SEMVER.fullmatch(found):
+        print(f'version: the version in {manifest} is not a semver version such as 1.2.3 or 1.2.0-beta.1, with no v '
+              f'and no space: {ascii(found)}', file=sys.stderr)
         return 2
     print(found)
     return 0

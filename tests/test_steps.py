@@ -1533,6 +1533,21 @@ class VersionTests(unittest.TestCase):
         for version in ("1.2.0-beta.1", "2.0.0-rc.1+build.5", "0.0.0"):
             self.assertEqual(self.run_on(json.dumps({"version": version})), (0, version + "\n", ""), version)
 
+    def test_a_version_that_is_not_strict_semver_exits_2(self) -> None:
+        # A release makes the tag v + VERSION, so v1.2.3 would give vv1.2.3, and 1.0 a tag that npm does not match.
+        for version in ("v1.2.3", "1.0", "1", " 1.0.0 ", "1.0.0 ", "1.2.3\n", "01.2.3", "1.02.3", "1.2.03",
+                        "1.2.3-01", "1.2.3-", "1.2.3+", "1.2.3-a..b", "1.2.3+a..b", "1.2.3-\u03b2", "\u0661.2.3",
+                        "1.2.3.4", "=1.2.3", "^1.2.3", "1.2.x", "latest"):
+            code, out, err = self.run_on(json.dumps({"version": version}))
+            self.assertEqual((code, out), (2, ""), version)
+            self.assertTrue(err.startswith("version: the version in"), err)
+
+    def test_a_valid_prerelease_and_build_print_as_they_are(self) -> None:
+        for version in ("1.2.3-alpha", "1.2.3-0.3.7", "1.2.3-x.7.z.92", "1.2.3-x-y-z.--", "1.2.3+20130313144700",
+                        "1.2.3-beta+exp.sha.5114f85", "1.2.3+21AF26D3----117B344092BD", "10.20.30", "1.2.3-0a",
+                        "1.2.3-rc.1+build.01"):
+            self.assertEqual(self.run_on(json.dumps({"version": version})), (0, version + "\n", ""), version)
+
     def test_a_byte_order_mark_is_no_part_of_the_file(self) -> None:
         self.assertEqual(self.run_on(raw=b'\xef\xbb\xbf{"version": "1.0.0"}'), (0, "1.0.0\n", ""))
 
