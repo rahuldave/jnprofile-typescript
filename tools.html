@@ -1,4 +1,6 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="generator" content="smalldocs-0.5.5"><meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes"><title>The tools – jnprofile-typescript</title><link rel="icon" href="favicon.svg"><link rel="stylesheet" href="site_libs/themes/litera-reading/litera-reading.css" data-mode="light" class="quarto-color-scheme" id="quarto-bootstrap-light" media="not all and (prefers-color-scheme: dark)"><link rel="stylesheet" href="site_libs/themes/darkly-reading/darkly-reading.css" data-mode="dark" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap-dark" media="(prefers-color-scheme: dark)"><link rel="stylesheet" href="site_libs/bootstrap-icons/bootstrap-icons.min.css"><link rel="stylesheet" href="site_libs/smalldocs.css"><meta name="smalldocs:offset" content="./"><script src="site_libs/bootstrap/bootstrap.bundle.min.js"></script><script src="site_libs/fuse/fuse.min.js"></script><script src="site_libs/smalldocs.js" defer></script><script>(function(){var d=document.documentElement,s=null;try{s=localStorage.getItem('smalldocs-scheme')}catch(e){}var alt=s?s==='alternate':!!(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);var ls=document.querySelectorAll('link.quarto-color-scheme');if(alt)d.dataset.scheme='alternate';if(s)ls.forEach(function(l){var on=l.classList.contains('quarto-color-alternate')===alt;if(on)l.setAttribute('blocking','render');l.media=on?'all':'not all'});var on=ls[alt?1:0];if(on&&on.dataset.mode==='dark')d.classList.add('quarto-dark')})();</script></head><body class="nav-fixed"><header id="quarto-header" class="headroom sticky-top"><nav class="navbar navbar-expand-lg sd-navbar-default"><div class="navbar-container container-fluid"><div class="navbar-brand-container mx-auto"><a class="navbar-brand" href="index.html"><span class="navbar-title">jnprofile-typescript</span></a></div><button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button><div class="collapse navbar-collapse" id="navbarCollapse"><ul class="navbar-nav navbar-nav-scroll me-auto"><li class="nav-item"><a class="nav-link" href="index.html"><span class="menu-text">Home</span></a></li><li class="nav-item"><a class="nav-link active" href="tools.html" aria-current="page"><span class="menu-text">Tools</span></a></li></ul><ul class="navbar-nav navbar-nav-scroll ms-auto"><li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="nav-menu-1" role="link" data-bs-toggle="dropdown" aria-expanded="false"><span class="menu-text">Projects</span></a><ul class="dropdown-menu" aria-labelledby="nav-menu-1"><li class=""><a class="dropdown-item" href="https://rahuldave.github.io/jnterfaces/"><span class="menu-text">jnterfaces</span></a></li><li class=""><a class="dropdown-item" href="https://rahuldave.github.io/jnprofile-python/"><span class="menu-text">jnprofile-python</span></a></li><li class=""><a class="dropdown-item" href="https://rahuldave.github.io/jnprofile-typescript/"><span class="menu-text">jnprofile-typescript</span></a></li><li class=""><a class="dropdown-item" href="https://rahuldave.github.io/agent_gest_git_skills/"><span class="menu-text">agent_gest_git_skills</span></a></li></ul></li><li class="nav-item compact"><a class="nav-link" href="https://github.com/rahuldave/jnprofile-typescript" aria-label="github"><i class="bi bi-github" role="img"></i></a></li><li class="nav-item compact"><a class="quarto-color-scheme-toggle nav-link" href="" title="Toggle dark mode" onclick="window.smalldocsToggleScheme(); return false;"><i class="bi"></i></a></li></ul><div class="quarto-navbar-tools"><div class="smalldocs-search" id="quarto-search"><i class="bi bi-search" aria-hidden="true"></i><input type="search" class="form-control form-control-sm" placeholder="Search" aria-label="Search" autocomplete="off"><div class="smalldocs-search-results dropdown-menu"></div></div></div></div></div></nav></header><div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article has-margin"><div id="quarto-margin-sidebar" class="sidebar margin-sidebar"><nav id="TOC" role="doc-toc" class="toc-active"><h2 id="toc-title">On this page</h2><ul><li><a href="#the-base" id="toc-the-base" class="nav-link" data-scroll-target="#the-base">The base</a></li><li><a href="#lint" id="toc-lint" class="nav-link" data-scroll-target="#lint">lint</a></li><li><a href="#typecheck" id="toc-typecheck" class="nav-link" data-scroll-target="#typecheck">typecheck</a></li><li><a href="#test" id="toc-test" class="nav-link" data-scroll-target="#test">test</a></li></ul></nav><div class="toc-actions"><div class="action-links"><a href="https://github.com/rahuldave/jnprofile-typescript/blob/main/docs/tools.md" class="toc-action"><i class="bi bi-code"></i> View source</a></div><div class="action-links"><a href="https://github.com/rahuldave/jnprofile-typescript/issues/new" class="toc-action"><i class="bi bi-chat-right"></i> Report an issue</a></div></div></div><main class="content" id="quarto-document-content"><header id="title-block-header" class="quarto-title-block default"><div class="quarto-title"><h1 class="title">The tools</h1></div><div class="quarto-title-meta"></div></header><p>Each tool of the profile brings its packages, its recipes and its parts. The installer adds the packages to the <code>devDependencies</code> of <code>package.json</code> with npm.</p>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="generator" content="smalldocs-0.5.12"><meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes"><title>The tools – jnprofile-typescript</title><link rel="icon" href="favicon.svg"><link rel="stylesheet" href="site_libs/themes/atelier/atelier.css" data-mode="light" class="quarto-color-scheme" id="quarto-bootstrap-light" media="not all and (prefers-color-scheme: dark)"><link rel="stylesheet" href="site_libs/themes/atelier/atelier-dark.css" data-mode="dark" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap-dark" media="(prefers-color-scheme: dark)"><link rel="stylesheet" href="site_libs/bootstrap-icons/bootstrap-icons.min.css"><link rel="stylesheet" href="site_libs/smalldocs.css"><meta name="smalldocs:offset" content="./"><script src="site_libs/bootstrap/bootstrap.bundle.min.js"></script><script src="site_libs/fuse/fuse.min.js"></script><script src="site_libs/smalldocs.js" defer></script><script>(function(){var d=document.documentElement,s=null;try{s=localStorage.getItem('smalldocs-scheme')}catch(e){}var alt=s?s==='alternate':!!(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);var ls=document.querySelectorAll('link.quarto-color-scheme');if(alt)d.dataset.scheme='alternate';if(s)ls.forEach(function(l){var on=l.classList.contains('quarto-color-alternate')===alt;if(on)l.setAttribute('blocking','render');l.media=on?'all':'not all'});var on=ls[alt?1:0];if(on&&on.dataset.mode==='dark')d.classList.add('quarto-dark')})();</script></head><body class="nav-fixed"><header id="quarto-header" class="headroom sticky-top"><nav class="navbar navbar-expand-lg sd-navbar-default"><div class="navbar-container container-fluid"><div class="navbar-brand-container mx-auto"><a class="navbar-brand" href="index.html"><span class="navbar-title">jnprofile-typescript</span></a></div><button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button><div class="collapse navbar-collapse" id="navbarCollapse"><ul class="navbar-nav navbar-nav-scroll me-auto"><li class="nav-item"><a class="nav-link" href="index.html"><span class="menu-text">Home</span></a></li><li class="nav-item"><a class="nav-link active" href="tools.html" aria-current="page"><span class="menu-text">Tools</span></a></li></ul><ul class="navbar-nav navbar-nav-scroll ms-auto"><li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="nav-menu-1" role="link" data-bs-toggle="dropdown" aria-expanded="false"><span class="menu-text">Projects</span></a><ul class="dropdown-menu" aria-labelledby="nav-menu-1"><li class=""><a class="dropdown-item" href="https://rahuldave.github.io/jnterfaces/"><span class="menu-text">jnterfaces</span></a></li><li class=""><a class="dropdown-item" href="https://rahuldave.github.io/jnprofile-python/"><span class="menu-text">jnprofile-python</span></a></li><li class=""><a class="dropdown-item" href="https://rahuldave.github.io/jnprofile-typescript/"><span class="menu-text">jnprofile-typescript</span></a></li><li class=""><a class="dropdown-item" href="https://rahuldave.github.io/agent_gest_git_skills/"><span class="menu-text">agent_gest_git_skills</span></a></li></ul></li><li class="nav-item compact"><a class="nav-link" href="https://github.com/rahuldave/jnprofile-typescript" aria-label="github"><i class="bi bi-github" role="img"></i></a></li><li class="nav-item compact"><a class="quarto-color-scheme-toggle nav-link" href="" title="Toggle dark mode" onclick="window.smalldocsToggleScheme(); return false;"><i class="bi"></i></a></li></ul><div class="quarto-navbar-tools"><div class="smalldocs-search" id="quarto-search"><i class="bi bi-search" aria-hidden="true"></i><input type="search" class="form-control form-control-sm" placeholder="Search" aria-label="Search" autocomplete="off"><div class="smalldocs-search-results dropdown-menu"></div></div></div></div></div></nav></header><div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article has-margin"><div id="quarto-margin-sidebar" class="sidebar margin-sidebar"><nav id="TOC" role="doc-toc" class="toc-active"><h2 id="toc-title">On this page</h2><ul><li><a href="#the-base" id="toc-the-base" class="nav-link" data-scroll-target="#the-base">The base</a><ul><li><a href="#version" id="toc-version" class="nav-link" data-scroll-target="#version">version</a></li></ul></li><li><a href="#lint" id="toc-lint" class="nav-link" data-scroll-target="#lint">lint</a></li><li><a href="#typecheck" id="toc-typecheck" class="nav-link" data-scroll-target="#typecheck">typecheck</a></li><li><a href="#test" id="toc-test" class="nav-link" data-scroll-target="#test">test</a><ul><li><a href="#coverage-check" id="toc-coverage-check" class="nav-link" data-scroll-target="#coverage-check">coverage-check</a></li><li><a href="#test-paths" id="toc-test-paths" class="nav-link" data-scroll-target="#test-paths">test-paths</a></li></ul></li><li><a href="#integration" id="toc-integration" class="nav-link" data-scroll-target="#integration">integration</a></li><li><a href="#docstring" id="toc-docstring" class="nav-link" data-scroll-target="#docstring">docstring</a></li><li><a href="#api" id="toc-api" class="nav-link" data-scroll-target="#api">api</a></li><li><a href="#the-language-layer" id="toc-the-language-layer" class="nav-link" data-scroll-target="#the-language-layer">The language layer</a></li></ul></nav><div class="toc-actions"><div class="action-links"><a href="https://github.com/rahuldave/jnprofile-typescript/blob/main/docs/tools.md" class="toc-action"><i class="bi bi-code"></i> View source</a></div><div class="action-links"><a href="https://github.com/rahuldave/jnprofile-typescript/issues/new" class="toc-action"><i class="bi bi-chat-right"></i> Report an issue</a></div></div></div><main class="content" id="quarto-document-content"><header id="title-block-header" class="quarto-title-block default"><div class="quarto-title"><h1 class="title">The tools</h1></div><div class="quarto-title-meta"></div></header><p>Each tool of the profile brings its packages, its recipes and its parts. The installer adds the packages to the <code>devDependencies</code> of <code>package.json</code> with npm.</p>
+<p>The default tools are <code>lint</code>, <code>typecheck</code>, <code>test</code>, <code>docstring</code> and <code>api</code>. The first four fill six steps of <code>just check</code>, which are <code>fmt-check</code>, <code>lint</code>, <code>typecheck</code>, <code>test</code>, <code>coverage-check</code> and <code>docstring-check</code>. The tool <code>integration</code> is not a default tool. It fills the step <code>integration</code>. The tool <code>api</code> runs in the step <code>docs-check</code> of the docs role.</p>
+<p>A step is one recipe that <code>just check</code> runs. No step has a shebang line, so jlog, the program that logs each line of a recipe, logs the line of each step and its exit code.</p>
 <section id="the-base" class="level2">
 <h2 class="anchored" data-anchor-id="the-base">The base</h2>
 <p>Every project of the profile gets the base, even a project with no tool.</p>
@@ -15,11 +17,26 @@
 <td><code>just setup</code></td>
 <td>Installs every dependency into <code>node_modules</code>, as <code>package-lock.json</code> says</td>
 </tr>
+<tr>
+<td><code>just typescript::version</code></td>
+<td>Prints the version of <code>package.json</code>, for the release tag. See <a href="#version">version</a></td>
+</tr>
 </tbody>
 </table>
 </div>
-<p>The recipes run node and npm with <code>uvx --from &#x27;nodejs-wheel==24.*&#x27;</code>. The cache of npm is in <code>.local/npm-cache</code>.</p>
+<p>The recipes run node and npm with <code>uvx --from &#x27;nodejs-wheel==24.*&#x27;</code>. The cache of npm is in <code>.local/npm-cache</code>. The installer checks that uv can run node 24 before it writes anything. The helper script of the steps, <code>steps.py</code>, runs with <code>uv run --no-project</code> and Python 3.11 or later.</p>
 <p>The base adds <code>node_modules/</code>, <code>dist/</code>, <code>.local/</code> and <code>*.tsbuildinfo</code> to <code>.gitignore</code>. It adds <code>node_modules/</code> and <code>*.tsbuildinfo</code> to <code>.worktreedisposable</code>. That file lists the ignored files that a command can make again. <code>just worktrees-prune</code> keeps a worktree that has ignored files, but it does not count these files.</p>
+<section id="version" class="level3">
+<h3 class="anchored" data-anchor-id="version">version</h3>
+<p>The release of agent_gest_git_skills makes a tag from the version of the project. The tag must agree with the manifest, which is <code>package.json</code>. So each language profile has a recipe <code>version</code>. It is a recipe of the base, and not a step of <code>just check</code>.</p>
+<ul>
+<li><strong>A version.</strong> The recipe prints the value of the key <code>version</code> of <code>package.json</code> on one line, and exits with 0. It prints a prerelease as it is, for example <code>1.2.0-beta.1</code>.</li>
+<li><strong>A version that is not semver.</strong> The recipe exits with 2 and writes a message that starts with <code>version:</code>. The version must be <code>MAJOR.MINOR.PATCH</code>, with an optional <code>-PRERELEASE</code> and an optional <code>+BUILD</code>, as semver.org defines it. So <code>v1.2.3</code>, <code>1.0</code>, <code>01.2.3</code> and a version with a space fail. This rule is the same in each language profile, so <code>just release</code> never makes a bad tag, such as <code>vv1.2.3</code>.</li>
+<li><strong>No version.</strong> When the project has no <code>package.json</code>, or the file has no key <code>version</code>, the recipe prints nothing and exits with 0.</li>
+<li><strong>A file that it cannot read.</strong> The recipe exits with 2 and writes a message that starts with <code>version:</code>. A file that is not JSON, or not a JSON object, is such a file. A link to no file is such a file too.</li>
+</ul>
+<p>The recipe reads the file with the <code>json</code> module of Python, through <code>steps.py</code>. It runs with Python 3.11 or later, as the other recipes run <code>steps.py</code>. It needs no node, and it writes no file.</p>
+</section>
 </section>
 <section id="lint" class="level2">
 <h2 class="anchored" data-anchor-id="lint">lint</h2>
@@ -38,13 +55,17 @@
 <td>Formats the code. Extra arguments go to biome: <code>just fmt src</code></td>
 </tr>
 <tr>
+<td><code>just fmt-check</code></td>
+<td>Fails when biome would change the format of a file. It changes no file. It is a step of <code>just check</code></td>
+</tr>
+<tr>
 <td><code>just lint</code></td>
 <td>Checks the code against the rules of biome. Extra arguments go to biome: <code>just lint --write</code></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>The part is an include in <code>biome.json</code>. Its <code>extends</code> names <code>./.agents/config/typescript/lint.json</code>. That file makes biome read the ignore file of git, so biome skips the files that git ignores. It leaves out <code>dist</code>, <code>node_modules</code>, <code>.agents</code>, <code>.claude</code> and <code>.codex</code>. It also sets the formatter to indent with spaces and to keep lines to at most 120 characters.</p>
+<p>The part is an include in <code>biome.json</code>. Its <code>extends</code> names <code>./.agents/config/typescript/lint.json</code>. That file makes biome read the ignore file of git, so biome skips the files that git ignores. It leaves out <code>dist</code>, <code>node_modules</code>, <code>.agents</code>, <code>.claude</code> and <code>.codex</code>, and the Markdown pages, which <code>prose-check</code> checks. A project that sets its own <code>files.includes</code> in <code>biome.json</code> replaces that list, so it must repeat these exclusions. It also sets the formatter to indent with spaces and to keep lines to at most 120 characters.</p>
 </section>
 <section id="typecheck" class="level2">
 <h2 class="anchored" data-anchor-id="typecheck">typecheck</h2>
@@ -60,7 +81,7 @@
 <tbody>
 <tr>
 <td><code>just typecheck</code></td>
-<td>Checks the types with tsc and <code>tsconfig.json</code>. A project in which <code>tsconfig.json</code> matches no code yet passes</td>
+<td>Checks the types with tsc and <code>tsconfig.json</code>. A project in which <code>tsconfig.json</code> matches no code yet passes. It is a step of <code>just check</code></td>
 </tr>
 </tbody>
 </table>
@@ -69,7 +90,7 @@
 </section>
 <section id="test" class="level2">
 <h2 class="anchored" data-anchor-id="test">test</h2>
-<p>The packages are <code>typescript@7</code> and <code>@types/node@24</code>, as for <code>typecheck</code>. The tool has the same part in <code>tsconfig.json</code>. When both tools are on, the include stays until both are off.</p>
+<p>The packages are <code>typescript@7</code>, <code>@types/node@24</code> and <code>c8@12</code>. c8 records which lines the tests run. The tool has the same part in <code>tsconfig.json</code> as <code>typecheck</code>. When both tools are on, the include stays until both are off.</p>
 <div class="sd-table">
 <table class="caption-top table">
 <thead>
@@ -85,11 +106,221 @@
 </tr>
 <tr>
 <td><code>just test</code></td>
-<td>Compiles, then runs the tests in <code>dist/</code> with <code>node --test</code>. With no arguments, a project in which <code>tsconfig.json</code> matches no code yet passes</td>
+<td>Compiles into <code>.jnprofile-typescript/build/</code>, then runs the tests there with <code>node --test</code> under c8. c8 writes the coverage as LCOV to <code>.jnprofile-typescript/lcov.info</code>. Extra arguments are options of <code>node --test</code>: <code>just test --test-name-pattern=add</code>. With no arguments, a project in which <code>tsconfig.json</code> matches no code yet passes. With the tool <code>integration</code>, the tests in <code>tests/integration</code> do not run, because <code>just integration</code> runs them. It is a step of <code>just check</code></td>
+</tr>
+<tr>
+<td><code>just coverage-check</code></td>
+<td>Fails on each changed line of code that no test runs. It is a step of <code>just check</code></td>
+</tr>
+<tr>
+<td><code>just cov</code></td>
+<td>Compiles, runs the tests, and shows the lines that they ran. With the tool <code>integration</code>, the tests in <code>tests/integration</code> do not run</td>
+</tr>
+<tr>
+<td><code>just typescript::test-paths FILE...</code></td>
+<td>Runs only the test files that you name, for <code>test-parent</code> of the commit gates. See <a href="#test-paths">test-paths</a></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>Put the code and the tests in <code>src/</code>. Name each test file <code>NAME.test.ts</code>, for example <code>src/app.test.ts</code>. The build writes it as <code>dist/app.test.js</code>. With no arguments, <code>just test</code> runs each file in <code>dist/</code> whose name ends in <code>.test.js</code>. A test imports the code with the <code>.js</code> ending, for example <code>import { add } from &quot;./app.js&quot;</code>, because the code runs from <code>dist/</code>.</p>
+<p>Put the code and the tests in <code>src/</code>. Name each test file <code>NAME.test.ts</code>, for example <code>src/app.test.ts</code>.</p>
+<p><code>just test</code> removes <code>.jnprofile-typescript/build/</code> and compiles into it again, so the old output of a test that you deleted from <code>src</code> does not run. It runs each file there whose name ends in <code>.test.js</code>, <code>.test.mjs</code>, <code>.test.cjs</code> or <code>.test.jsx</code>. A test imports the code with the <code>.js</code> ending, for example <code>import { add } from &quot;./app.js&quot;</code>, because the code runs from the build.</p>
+<p>The build reads <code>tsconfig.json</code> with <code>tsc --showConfig</code>, and sets these flags in place of the settings of the project:</p>
+<ul>
+<li><strong>The output.</strong> The output goes to the build, with the folders of the project, such as <code>build/src/app.js</code>. <code>noEmit</code> and <code>emitDeclarationOnly</code> are off, so tsc writes JavaScript.</li>
+<li><strong>The declarations.</strong> When <code>declaration</code> or <code>composite</code> is on, the declarations go to <code>build/types</code>, not to the <code>declarationDir</code> of the project. So a run writes no file outside the build.</li>
+<li><strong>Source maps and build info.</strong> The build has source maps and its own build info, whatever <code>tsconfig.json</code> says about <code>sourceMap</code> and <code>tsBuildInfoFile</code>. So c8 maps the coverage back to <code>src</code>, and an incremental project writes all of its output again.</li>
+<li><strong>A test file that tsc does not compile</strong> fails <code>just test</code>, because its tests would never run. An example is a file in <code>tests/</code> when the <code>include</code> names only <code>src</code>. Add its folder to the <code>include</code>. A test file that another runner owns, such as an end-to-end test, needs a name that the key <code>tests</code> does not match, such as <code>checkout.e2e.ts</code>.</li>
+</ul>
+<p>Some things work differently when the code runs from the build:</p>
+<ul>
+<li><strong>Fixtures.</strong> The build holds only the output of tsc. A test that reads a data file next to it, through <code>import.meta.dirname</code>, does not find it. Build the path from the top of the project, such as <code>path.join(process.cwd(), &quot;src/fixtures/a.json&quot;)</code>.</li>
+<li><strong>Path aliases.</strong> tsc does not rewrite the aliases of <code>paths</code>, so node cannot find them. The <code>imports</code> of <code>package.json</code> name files in <code>dist</code>, not in the build. So use relative imports, such as <code>&quot;./lib/a.js&quot;</code>, in the code that the tests load.</li>
+<li><strong>JSX.</strong> With <code>jsx</code> set to <code>preserve</code>, tsc writes a <code>.test.tsx</code> file as <code>.test.jsx</code>, and node cannot run it, so <code>just test</code> fails on it. Set <code>jsx</code> to <code>react-jsx</code> for the tests.</li>
+<li><strong>Other test names.</strong> Only the names of the key <code>tests</code> of <code>profile.json</code> are test files. A file such as <code>app.spec.ts</code> counts as code, so <code>coverage-check</code> and <code>docstring-check</code> check it, and <code>just test</code> does not run it.</li>
+</ul>
+<p>c8 runs with <code>--clean</code>, so no coverage of an old run counts, whatever a <code>.c8rc.json</code> of the project says. It leaves out only the test files and <code>node_modules</code>, so a code file such as <code>src/__tests__/helper.ts</code> counts.</p>
+<p>The tool adds <code>.jnprofile-typescript/</code> to <code>.gitignore</code> and to <code>.worktreedisposable</code>. That folder holds the report and the run ID.</p>
+<section id="coverage-check" class="level3">
+<h3 class="anchored" data-anchor-id="coverage-check">coverage-check</h3>
+<p><code>coverage-check</code> compares the coverage report with the parent commit. It runs diff-cover with a limit of 100%.</p>
+<ul>
+<li><strong>A line that no test runs</strong> fails. Put <code>/* c8 ignore next */</code> above a line that no test can run, and the line counts as run. <code>/* c8 ignore next 3 */</code> leaves 3 lines out, and <code>/* c8 ignore start */</code> with <code>/* c8 ignore stop */</code> leaves a block out. c8 marks a whole function as not run, from its first line to its closing brace, so one line of ignore is not enough for a function. A function that never runs fails on its first line too, also a one-line arrow function such as <code>export const f = () =&gt; 1</code>.</li>
+<li><strong>A changed file that no test imports</strong> fails, because the report does not have it. A file of types only, such as a file with only an <code>interface</code>, does not count, because tsc writes no code for it, so no test can load it. A code file outside the <code>include</code> of <code>tsconfig.json</code>, such as a config file at the top of the project, is in no report. Put such a file in <code>.agents/coverage-exclude.txt</code>.</li>
+<li><strong>No report</strong> fails, with the message “write tests”. When no test runs, the report is missing or has no file.</li>
+<li><strong>The first commit</strong> has no parent. Then each line of code must run in the tests, a limit of 100%.</li>
+<li><strong>The files that do not count</strong> are the test files, the declaration files such as <code>types.d.ts</code>, the files in <code>.agents</code>, <code>.claude</code> and <code>.codex</code>, and the files in a folder <code>node_modules</code>. The files that <code>.agents/generated.txt</code> or <code>.agents/coverage-exclude.txt</code> names do not count either. The step reads both lists from the parent commit, so a commit cannot exempt its own code with them. The config of c8, such as <code>exclude</code> in <code>.c8rc.json</code>, comes from the commit itself, so <code>test-review</code> judges each change to it.</li>
+<li><strong>The report of the same run.</strong> <code>test</code> saves the run ID of <code>just check</code>, <code>JLOG_RUN</code>, with the tree of the worktree. <code>coverage-check</code> reads the report only when both match. Otherwise it runs the tests first.</li>
+<li><strong>The integration tests.</strong> A line that only the integration tests run counts as run when two things are true. The project has the tool <code>integration</code>. The key <code>steps</code> of <code>.agents/stack.json</code> has <code>integration</code>, so <code>just check</code> runs it. Then <code>coverage-check</code> reads the reports of <code>test</code> and of <code>integration</code>, and a line counts as run when one of them runs it. When the report of <code>integration</code> is not from the same run, <code>coverage-check</code> runs the integration tests first. With the answer <code>integration=verify</code>, <code>just check</code> does not run <code>integration</code>, so its report does not count.</li>
+</ul>
+</section>
+<section id="test-paths" class="level3">
+<h3 class="anchored" data-anchor-id="test-paths">test-paths</h3>
+<p><code>test-parent</code> of the commit gates runs <code>just typescript::test-paths</code> in a worktree of the parent commit, on each changed test file. A worktree has no <code>node_modules</code>, so the recipe runs <code>npm ci</code> first. It compiles the project into <code>.jnprofile-typescript/test-paths/</code>, then runs the output of each file that you name with <code>node --test</code>, in one process. Its exit code says what happened:</p>
+<div class="sd-table">
+<table class="caption-top table">
+<thead>
+<tr>
+<th>Code</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>The tests ran and passed</td>
+</tr>
+<tr>
+<td>1</td>
+<td>A test failed, or a test file does not build, as a new test of new code on the parent commit. tsc writes the other files also when one file has an error, so a file that does not build hides no other file</td>
+</tr>
+<tr>
+<td>5</td>
+<td>No test ran, as for a file whose tests are all skipped or todo, or a file with no test. With no file, it runs nothing and exits with 5</td>
+</tr>
+<tr>
+<td>any other</td>
+<td>npm, tsc or node itself failed, a test file is outside the <code>include</code> of <code>tsconfig.json</code>, or a test ended the run, as with <code>process.exit()</code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The output has one line for each test, so a test that passes next to one that fails shows. The recipe counts the tests from the JUnit report of node, so the count does not depend on the terminal output.</p>
+</section>
+</section>
+<section id="integration" class="level2">
+<h2 class="anchored" data-anchor-id="integration">integration</h2>
+<p>The packages are <code>typescript@7</code>, <code>@types/node@24</code> and <code>c8@12</code>, as for the tool <code>test</code>. The tool is not a default tool. Add it with <code>just install integration</code>.</p>
+<div class="sd-table">
+<table class="caption-top table">
+<thead>
+<tr>
+<th>Recipe</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>just integration</code></td>
+<td>Compiles into <code>.jnprofile-typescript/integration-build/</code>, then runs the tests of <code>tests/integration</code> there with <code>node --test</code> under c8. c8 writes the coverage as LCOV to <code>.jnprofile-typescript/integration/lcov.info</code>. Extra arguments are options of <code>node --test</code>, as for <code>just test</code>. With no test file in <code>tests/integration</code>, it passes. It is a step of <code>just check</code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Put each integration test in <code>tests/integration</code>, with a name such as <code>tests/integration/app.test.ts</code>. A test imports the code from <code>src</code> with a relative path and the <code>.js</code> ending, for example <code>import { add } from &quot;../../src/app.js&quot;</code>.</p>
+<p>The default <code>tsconfig.json</code> finds only <code>src</code>. So the build of <code>integration</code> adds each test file of <code>tests/integration</code> to the files that <code>tsconfig.json</code> finds. It does so with a config file of its own, which extends <code>tsconfig.json</code>. That file is at the top of the project only while tsc runs. An <code>exclude</code> of the project does not leave these files out.</p>
+<p><code>just typecheck</code> reads only <code>tsconfig.json</code>. To check the types of the integration tests too, add <code>tests/integration</code> to the <code>include</code>.</p>
+<p><code>just check</code> runs <code>integration</code> before <code>coverage-check</code>. So <code>coverage-check</code> reads the report of the step <code>integration</code> of the same run, and does not run the integration tests again. When <code>just integration</code> runs after it passed in the same run, on the same tree, it says “it passed before in this run” and does not run the tests again.</p>
+<p>Without the tool, <code>just test</code> and <code>just cov</code> run the tests in <code>tests/integration</code> too, and their build adds the folder to the <code>include</code> in the same way. A file in <code>tests/integration</code> whose name does not end in <code>.test.ts</code> is code, such as a helper. So <code>coverage-check</code> and <code>docstring-check</code> check it.</p>
+<p>The tool adds the same lines to <code>.gitignore</code> and to <code>.worktreedisposable</code> as the tool <code>test</code>.</p>
+</section>
+<section id="docstring" class="level2">
+<h2 class="anchored" data-anchor-id="docstring">docstring</h2>
+<p>The tool has no package in <code>package.json</code>. <code>npm exec</code> runs eslint with eslint-plugin-jsdoc and the parser of typescript-eslint, at fixed versions, from the cache of npm. That parser needs a TypeScript older than 6.1, and the project has TypeScript 7, so the tool keeps them out of the project. The first run downloads the packages.</p>
+<div class="sd-table">
+<table class="caption-top table">
+<thead>
+<tr>
+<th>Recipe</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>just docstring-check</code></td>
+<td>Fails on each class, method, function or arrow function with no JSDoc comment, exported or not. It names the file and the line. It is a step of <code>just check</code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The only rule is <code>jsdoc/require-jsdoc</code>, from the config <code>docstring.eslint.mjs</code> in <code>.agents/just/typescript/</code>. The step does not read an eslint config of your project.</p>
+<p>A constructor and a setter do not count, because the comment of the class and of the getter say what they do. An inline callback, such as the function in <code>xs.map((x) =&gt; x + 1)</code>, does not count either. Nor do an overload signature, a method signature of an interface and a namespace, because the implementation and the type document them. An abstract method counts, and so does a function in a type expression, as in <code>const f = (() =&gt; 1) as F</code>.</p>
+<p>The test files, the declaration files, the files in <code>.agents</code>, <code>.claude</code> and <code>.codex</code>, the files in a folder <code>node_modules</code>, and the files that <code>.agents/generated.txt</code> of the parent commit names do not count.</p>
+<p>The profile names its files for the commit gates. The code is <code>**/*.ts</code>, <code>**/*.tsx</code>, <code>**/*.mts</code> and <code>**/*.cts</code>. The test files are <code>**/*.test.ts</code>, <code>**/*.test.tsx</code>, <code>**/*.test.mts</code> and <code>**/*.test.cts</code>. <code>test-parent</code> copies only the test files into the parent commit, so no new code reaches it.</p>
+</section>
+<section id="api" class="level2">
+<h2 class="anchored" data-anchor-id="api">api</h2>
+<p>The tool has no package in <code>package.json</code>. uv runs smalldocs 0.5.12 with node from the <code>nodejs-wheel</code> package. smalldocs reads the API with TypeDoc. When the project has no TypeDoc, npx fetches TypeDoc 0.28 into <code>.local/npm-cache</code>. The tool is a default tool, and its check runs in a project with the docs role of jnterfaces.</p>
+<div class="sd-table">
+<table class="caption-top table">
+<thead>
+<tr>
+<th>Recipe</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>just api-check</code></td>
+<td>Runs <code>smalldocs api check</code>. It fails on each exported function, class, interface, type or constant with no JSDoc comment. It also fails on each file with no module comment, and on each parameter or return with no comment. It names the file and the item, for example <code>app:add(a): no comment</code>. Then it runs <code>api-prose-check</code></td>
+</tr>
+<tr>
+<td><code>just api-prose-check</code></td>
+<td>Checks the API page of each changed file with the checker of nossaifd. A changed file is a code file with a change against <code>HEAD</code>, or each code file on the first commit. In CI, or with <code>--base REF</code>, it is a file with a change since the base, as for <code>prose-check</code>: <code>just api-prose-check --base main</code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>What <code>api-check</code> needs:</p>
+<ul>
+<li><strong>A module comment</strong> for each file. Put a JSDoc comment at the top of the file, before its imports. A JSDoc comment right before a declaration is the comment of that declaration. So in a file with no imports, give the first declaration a JSDoc comment of its own, after the module comment.</li>
+<li><strong>A JSDoc comment</strong> for each exported item.</li>
+<li><strong>A comment for each parameter.</strong> Put a <code>//</code> comment after the parameter, on its line, or a <code>@param</code> line in the JSDoc comment.</li>
+<li><strong>A comment for the return.</strong> Put a <code>@returns</code> line in the JSDoc comment. smalldocs also reads a <code>//</code> comment after the <code>{</code> of the body, but biome moves that comment into the body, so <code>fmt-check</code> fails on it. A function that returns <code>void</code> needs no comment on its return.</li>
+</ul>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode ts code-with-copy"><code class="sourceCode ts"><span class="co">/** The arithmetic of the app. */</span>
+<span class="kw">import</span> { round } <span class="kw">from</span> <span class="st">&quot;./round.js&quot;</span>;
+
+<span class="co">/**
+ * Add two numbers.
+ * @returns the sum
+ */</span>
+<span class="kw">export</span> <span class="kw">function</span> add(
+  a<span class="op">:</span> <span class="dt">number</span>, <span class="co">// the first number</span>
+  b<span class="op">:</span> <span class="dt">number</span>, <span class="co">// the second number</span>
+)<span class="op">:</span> <span class="dt">number</span> {
+  <span class="cf">return</span> round(a <span class="op">+</span> b);
+}</code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The settings of <code>api-check</code>:</p>
+<ul>
+<li><strong>With a TypeScript section in the key <code>api</code> of <code>docs/_smalldocs.yml</code></strong>, smalldocs reads its settings there. A TypeScript section has <code>language: typescript</code>, and its key <code>entry</code> names the entry points. The step takes only the TypeScript sections, so a Python section of the same file does not count. A key <code>api</code> with no TypeScript section does not count either. When PyYAML cannot read the file, the step fails with exit 2.</li>
+<li><strong>Otherwise</strong>, the step writes a temporary config, with <code>language: typescript</code>. Its entry is the index of <code>src</code>, which is <code>src/index.ts</code>, <code>src/index.tsx</code>, <code>src/index.mts</code> or <code>src/index.cts</code>, when one exists. Then the API is what the index exports. Without an index, the entry is each code file in <code>src/</code>, and each file gets its own page. The test files, the declaration files and the files that <code>.agents/generated.txt</code> of the parent commit names do not count.</li>
+<li><strong>With no index and no code file in <code>src/</code></strong>, the step passes and says that there is no API to check.</li>
+<li><strong>When TypeDoc fails</strong>, smalldocs exits with 2, and the step says so. An example is an entry that <code>tsconfig.json</code> does not find.</li>
+</ul>
+<p>The rule of the API files:</p>
+<ul>
+<li><strong>The file.</strong> The profile installs <code>.agents/just/typescript/api_rule.py</code> with its recipes. The installer keeps <code>.agents/just/</code> for itself, so a tool of <code>profile.json</code> cannot own a file there. The file comes with the folder that <code>skill-package.json</code> installs, also without the <code>api</code> tool.</li>
+<li><strong>The function.</strong> <code>is_api(path)</code> is True when the path, relative to the top of the project, is a source file of the API pages. The commit gate of agent_gest_git_skills loads the file from the parent commit. It calls <code>is_api</code> on each changed path, to fill the alias <code>@api</code>.</li>
+<li><strong>How it runs.</strong> It uses only the Python standard library, on Python 3.9 or later, under <code>python -I -B</code>, at the top of the project. It reads git with <code>git show</code> and <code>git ls-files</code>, and it writes no file.</li>
+<li><strong>Without the <code>api</code> tool or the docs role</strong>, as <code>.agents/stack.json</code> records them, <code>is_api</code> is False for each path.</li>
+<li><strong>The entry</strong> comes from the TypeScript sections of the key <code>api</code> of <code>docs/_smalldocs.yml</code>. Without a TypeScript section, the entry is the same as for <code>api-check</code>. It is the index of <code>src</code>, or else the folder <code>src</code>. A TypeScript section with no <code>entry</code> also takes that entry. The rule reads the file without PyYAML. It reads maps, lists, flow lists such as <code>[a, b]</code> and flow maps such as <code>{a: 1}</code>, also over several lines. It reads plain or quoted values and comments.</li>
+<li><strong>A broken docs config.</strong> When the rule cannot read <code>docs/_smalldocs.yml</code>, <code>is_api</code> is True for each code file. So the gate does not turn off without notice. Test files, declaration files and the files that never count stay out. The rule does not read anchors such as <code>&amp;name</code>, tags such as <code>!!map</code> or block values such as <code>|</code>. A config with one of them is a config that the rule cannot read.</li>
+<li><strong>A broken record.</strong> When the rule cannot read <code>.agents/stack.json</code>, it cannot know that the <code>api</code> tool is on. Then <code>is_api</code> is False for each path. No error stops the gate.</li>
+<li><strong>The files that count.</strong> An entry file counts. A file that an entry file imports or exports again with a relative path, such as <code>./app.js</code> or <code>require(&quot;./app&quot;)</code>, also counts, and so do the files that those files import. In a folder that the docs config names as an entry, each code file counts, and each test file and declaration file counts too. In the default folder <code>src</code>, test files and declaration files do not count, as for <code>api-check</code>.</li>
+<li><strong>A run of smalldocs 0.5.12</strong> settled the folder entry. The entry was <code>../src</code>, a folder with <code>app.test.ts</code> and <code>shapes.d.ts</code>. TypeDoc expanded the folder. <code>smalldocs api check</code> reported the items of both files, and <code>smalldocs api build</code> wrote a page for each. So a test file in that folder feeds the API pages.</li>
+<li><strong>The files that never count</strong> are the files that <code>.agents/generated.txt</code> of the parent commit names and the files in <code>.agents/</code>, <code>.claude/</code>, <code>.codex/</code> and <code>node_modules</code>.</li>
+<li><strong>A limit.</strong> The rule follows only relative paths. An import through a path alias of <code>tsconfig.json</code>, such as <code>@/app</code>, does not count. Then name the file as an entry, or name its folder.</li>
+</ul>
+<p>Where the checks run:</p>
+<ul>
+<li><strong><code>api-check</code></strong> runs in the step <code>docs-check</code> of the docs role of jnterfaces. That step runs the <code>api-check</code> of each language that has one. The comments are a check of the docs site, so without the docs role no step of <code>just check</code> runs <code>api-check</code>. You can still run <code>just api-check</code>, and <code>just verify</code> runs it.</li>
+<li><strong><code>api-prose-check</code></strong> runs in <code>api-check</code>. The step <code>prose-check</code> of nossaifd runs it too. It runs once in a run. When it passed before in the same run of <code>just check</code>, on the same tree and with the same base, it says so and does not run again. A call with another base runs again.</li>
+</ul>
+<p>The changed files of <code>api-prose-check</code>:</p>
+<ul>
+<li><strong>On a machine</strong>, without CI and without <code>--base</code>, the step does not load <code>prose_gate.py</code>. A changed file has a change against <code>HEAD</code>, in the index or the working tree, or is a new file.</li>
+<li><strong>In CI</strong>, a checkout is clean, so the changes against <code>HEAD</code> hold no file. So in CI the step takes the base that <code>prose-check</code> of nossaifd takes. On a pull request, the base is the merge base of the base branch and <code>HEAD</code>. CI is on when the variable <code>CI</code> is set to a value other than empty, <code>false</code> and <code>0</code>.</li>
+<li><strong>With <code>--base REF</code></strong>, the base is the merge base of <code>REF</code> and <code>HEAD</code>, also outside CI. As in <code>check-changed</code> of nossaifd, the last <code>--base</code> counts, and <code>-v</code> does nothing here.</li>
+<li><strong>The rule of the base</strong> is not in this profile. The step loads <code>.agents/skills/nossaifd/scripts/prose_gate.py</code>, which the prose role installs, and calls its <code>base_commit</code>. So in CI, both steps compare with the same commit. The load writes no bytecode into the skill.</li>
+<li><strong>An error of the base</strong>, as a shallow clone or a base that is not a commit, fails the step with exit 2 and the message of nossaifd. An install of nossaifd with no <code>base_commit</code> fails the step with exit 2 in CI or with <code>--base</code>, and asks you to run <code>just install</code>.</li>
+</ul>
+<p><code>api-prose-check</code> builds the API pages in a temporary folder outside the project, with the TypeScript sections of the settings. The page of a changed file is each page with an item from that file. A page holds the first paragraph of the module comment in its front matter, where the checker does not read it. So the step also checks the module comment of each changed file with a page, and of each changed entry file, such as an index that only exports again. A changed file that is no entry and has no item on a page is not in the API, so the step does not check it.</p>
+<p>Then the step runs <code>.agents/skills/nossaifd/scripts/check.py</code> on those pages. A hard problem fails the step. Fix it in the JSDoc comment or the comment that it comes from. Without the prose role, which installs the checker, the step passes and says so.</p>
+<p>The tool adds <code>.jnprofile-typescript/</code> to <code>.gitignore</code> and to <code>.worktreedisposable</code>. That folder holds the run ID of <code>api-prose-check</code>.</p>
+</section>
+<section id="the-language-layer" class="level2">
+<h2 class="anchored" data-anchor-id="the-language-layer">The language layer</h2>
+<p>The profile installs <code>.agents/targets/typescript/</code>. It holds the TypeScript rules that the agentic targets add to their base task, in the files <code>review.md</code>, <code>test-review.md</code>, <code>docs.md</code> and <code>prose.md</code>. For example, <code>test-review.md</code> says that each new <code>/* c8 ignore */</code> needs a reason.</p>
 </section>
 </main></div><footer class="footer"><div class="nav-footer"><div class="nav-footer-left">Part of <a href="https://rahuldave.github.io/jnterfaces/">jnterfaces</a> and its packages.</div><div class="nav-footer-center"></div><div class="nav-footer-right">Built with <a href="https://docs.smallish.dev/">smalldocs</a>.</div></div></footer></body></html>
