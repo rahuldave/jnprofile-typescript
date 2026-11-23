@@ -61,9 +61,11 @@ BUILD = WORK / 'build'
 INTEGRATION_FOLDER = 'tests/integration'
 INTEGRATION = WORK / 'integration' / 'lcov.info'
 INTEGRATION_BUILD = WORK / 'integration-build'
+# The build of quick, a folder of its own, so that quick leaves the build of test and its source maps alone.
+QUICK_BUILD = WORK / 'quick-build'
 # The report of each run that coverage-check reads, the folder of the build of the run, and the raw data of c8.
 REPORTS = {'test': REPORT, 'integration': INTEGRATION, 'prose': None}
-BUILDS = {'test': BUILD, 'cov': BUILD, 'integration': INTEGRATION_BUILD}
+BUILDS = {'test': BUILD, 'cov': BUILD, 'integration': INTEGRATION_BUILD, 'quick': QUICK_BUILD}
 RAW = {'test': WORK / 'c8', 'integration': WORK / 'c8-integration', 'prose': None}
 # The record of the installer. Its key steps names the steps of just check.
 RECORD = Path('.agents/stack.json')
@@ -636,10 +638,11 @@ def emitted(path, build, options):
 
 
 def build(name, module, given):
-    """Compile the project into the build of NAME, test, cov or integration, and return the exit code.
+    """Compile the project into the build of NAME, test, cov, integration or quick, and return the exit code.
 
     With the tool integration, which the recipe integration of the module MODULE shows, test and cov leave out the
     integration tests in tests/integration, and integration runs only them. Without it, test and cov run them too.
+    quick takes the tests of test.
     It fails on each test file of the run that tsc writes no output for, because no test of it would run. Such a
     file is outside the include of tsconfig.json. With nothing to run, it exits with 3 when GIVEN, the count of the
     arguments of the recipe, is 0, and with 1 otherwise: tsconfig.json finds no file at all, error TS18003, or there

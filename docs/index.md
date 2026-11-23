@@ -25,6 +25,8 @@ just uninstall lint
 
 The machine needs `just` and `uv`. `uv` runs node and npm from the `nodejs-wheel` package, so you do not install node. To install every dependency into `node_modules`, run `just setup`.
 
+In a fix round, the pass of fixes after a review, run `just quick`. It runs the format check, the lint, the type check and the unit tests of each installed tool, with no coverage. Run `just check` once on the final tree.
+
 ## The tools
 
 | Tool | Packages | Recipes |

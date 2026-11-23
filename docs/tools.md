@@ -12,10 +12,13 @@ A step is one recipe that `just check` runs. No step has a shebang line, so jlog
 
 Every project of the profile gets the base, even a project with no tool.
 
+A fix round is one pass of fixes after a review. `just typescript::quick` gives an agent one fixed set of checks for each fix round, so the agent does not choose a set of its own. The tests of `quick` run with no c8, so they measure no coverage and write no report. They also leave the build and the report of `just test` as they are, so a later `coverage-check` reads the report of `just test` and not of `quick`.
+
 | Recipe | What it does |
 |---|---|
 | `just setup` | Installs every dependency into `node_modules`, as `package-lock.json` says |
 | `just typescript::version` | Prints the version of `package.json`, for the release tag. See [version](#version) |
+| `just typescript::quick` | Runs the quick checks of a fix round, with no coverage: `fmt-check`, `lint`, `typecheck`, and the unit tests with a plain `node --test`, without c8. Each check runs only when its tool is installed, and the first check that fails stops the rest. The tests are those of `just test`, in a build of their own in `.jnprofile-typescript/quick-build/`. Extra arguments are options of `node --test`: `just typescript::quick --test-name-pattern=add`. As for `just test`, a project with no code yet passes with no arguments, and fails with arguments. The installer also gives the project `just quick`, which runs it in each profile that has it. It is not a step of `just check`, so run `just check` once on the final tree |
 
 The recipes run node and npm with `uvx --from 'nodejs-wheel==24.*'`. The cache of npm is in `.local/npm-cache`. The installer checks that uv can run node 24 before it writes anything. The helper script of the steps, `steps.py`, runs with `uv run --no-project` and Python 3.11 or later.
 

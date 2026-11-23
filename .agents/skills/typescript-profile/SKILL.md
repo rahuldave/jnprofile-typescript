@@ -16,7 +16,7 @@ them out.
 
 | Tool | Packages | Recipes | Parts in config files | Lines in `.gitignore` and `.worktreedisposable` |
 |---|---|---|---|---|
-| none, always there | none | `setup`, `version` | none | `node_modules/`, `*.tsbuildinfo`; also `dist/` and `.local/` in `.gitignore` |
+| none, always there | none | `setup`, `version`, `quick` | none | `node_modules/`, `*.tsbuildinfo`; also `dist/` and `.local/` in `.gitignore` |
 | `lint` | `@biomejs/biome@2` | `fmt`, `fmt-check`, `lint` | `biome.json` | none |
 | `typecheck` | `typescript@7`, `@types/node@24` | `typecheck` | `tsconfig.json` | none |
 | `test` | `typescript@7`, `@types/node@24`, `c8@12` | `build`, `test`, `coverage-check`, `cov`, `test-paths` | `tsconfig.json` | `.jnprofile-typescript/` |
@@ -58,6 +58,12 @@ settings win over the settings of the own file.
 
 - **`just typescript lint`** runs the recipe of the typescript profile.
 - **`just lint`** runs the `lint` of each language of the project.
+- **`just typescript::quick [ARGS...]`** runs `fmt-check`, `lint`,
+  `typecheck` and the unit tests with a plain `node --test`, each only when
+  its tool is installed. It measures no coverage and writes no report. Extra
+  arguments are options of `node --test`. Use it in a fix round, and run
+  `just check` once on the final tree. `just quick` runs it in each language
+  that has it.
 - **`just verify`** runs every installed check of each language, then `git
   diff --check`.
 - **With more than one language**, a combined recipe such as `just test x`
