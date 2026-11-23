@@ -29,6 +29,11 @@ just uninstall lint
 The machine needs `just` and `uv`. `uv` runs node and npm from the
 `nodejs-wheel` package.
 
+In a fix round, the pass of fixes after a review, run `just quick`. It runs
+`fmt-check`, `lint`, `typecheck` and the unit tests, each only when its tool is
+installed, with no coverage. It is not a step of `just check`, so run
+`just check` once on the final tree.
+
 ## What is here
 
 | Path | What it holds |

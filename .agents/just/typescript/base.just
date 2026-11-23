@@ -18,6 +18,17 @@ setup:
 version:
     {{python_run}} {{ts_steps}} version
 
+# Run the quick checks of a fix round, with no coverage: fmt-check, lint, typecheck, and the unit tests with a plain
+# node --test, without c8. Each check runs only when its tool is installed: when the module, module_file(), has its
+# recipe. The first check that fails stops the rest. The tests are those of just test, in a build of their own, and
+# write no report, so coverage-check does not read them. Extra arguments are options of node --test:
+# just typescript::quick --test-name-pattern=add. Run just check once on the final tree
+quick *args:
+    @if just --justfile {{quote(module_file())}} --summary | tr ' ' '\n' | grep -qx fmt-check; then just --justfile {{quote(module_file())}} fmt-check; fi
+    @if just --justfile {{quote(module_file())}} --summary | tr ' ' '\n' | grep -qx lint; then just --justfile {{quote(module_file())}} lint; fi
+    @if just --justfile {{quote(module_file())}} --summary | tr ' ' '\n' | grep -qx typecheck; then just --justfile {{quote(module_file())}} typecheck; fi
+    @if just --justfile {{quote(module_file())}} --summary | tr ' ' '\n' | grep -qx test; then just --justfile {{quote(module_file())}} _test quick "$@"; fi
+
 # The script of test, cov and integration: tsc, then node --test under c8. test and integration write their LCOV
 # reports for coverage-check, and cov shows the lines. test and integration are steps of just check, and jlog logs
 # only the lines of a recipe with no shebang line, so each runs this script in one line, through just. module_file()
@@ -43,11 +54,16 @@ _test name *args:
         report=.jnprofile-typescript/integration
         raw=.jnprofile-typescript/c8-integration
     fi
+    [ "$name" = quick ] && where=.jnprofile-typescript/quick-build
     {{python_run}} {{ts_steps}} build "$name" {{quote(module_file())}} "$#" || code=$?
     if [ "${code:-0}" -eq 3 ]; then exit 0; fi
     if [ "${code:-0}" -ne 0 ]; then exit "$code"; fi
     # The excludes take the place of the default list of c8, which also leaves out code files such as
     # src/__tests__/helper.ts and src/ab-test.ts. They leave out only the test files of the profile.
+    # quick runs node --test with no c8, so it measures no coverage and writes no report.
+    if [ "$name" = quick ]; then
+        exec {{node}} --test "$@" "$where/**/*.test.js" "$where/**/*.test.mjs" "$where/**/*.test.cjs" "$where/**/*.test.jsx"
+    fi
     if [ "$name" = cov ]; then
         exec {{npm}} exec -- c8 --clean --exclude='**/*.test.{js,mjs,cjs,jsx}' --exclude='**/node_modules/**' \
             --reporter=text --temp-directory=.jnprofile-typescript/c8-cov \
